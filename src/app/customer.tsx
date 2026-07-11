@@ -177,9 +177,10 @@ export default function CustomerDashboard() {
 }
 
 function ContractorCard({ contractor }: { contractor: (typeof CONTRACTORS)[0] }) {
+  const router = useRouter();
   const initials = contractor.name.split(" ").map((n) => n[0]).join("").slice(0, 2);
   return (
-    <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+    <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]} onPress={() => router.push("/contractor-detail")}>
       <LinearGradient colors={["#3b82f6", "#2563eb"]} style={styles.avatar}>
         <Text style={styles.avatarText}>{initials}</Text>
       </LinearGradient>
