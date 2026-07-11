@@ -156,7 +156,8 @@ export default function CustomerDashboard() {
           <SafeAreaView edges={["bottom"]}>
             <Pressable
               style={({ pressed }) => [styles.postBtnWrap, pressed && styles.pressed]}
-              onPress={() => {}}
+              onPress={() => router.push("/post-project")}
+
             >
               <LinearGradient
                 colors={["#3b82f6", "#2563eb"]}

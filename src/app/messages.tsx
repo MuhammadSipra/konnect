@@ -76,7 +76,7 @@ export default function MessagesScreen() {
   };
 
   const handleConversationPress = (id: string) => {
-    // router.push({ pathname: "/chat", params: { id } });
+     router.push({ pathname: "/chat", params: { id } });
   };
 
   return (

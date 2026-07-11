@@ -48,10 +48,10 @@ import {
   ];
   
   const TABS = [
-    { key: "home", label: "Home", icon: "home" as const },
-    { key: "jobs", label: "Jobs", icon: "briefcase" as const },
-    { key: "messages", label: "Messages", icon: "chatbubbles" as const },
-    { key: "profile", label: "Profile", icon: "person" as const },
+    { key: "home", label: "Home", icon: "home" as const, route: "/contractor" },
+    { key: "jobs", label: "Jobs", icon: "briefcase" as const, route: "/jobs" },
+    { key: "messages", label: "Messages", icon: "chatbubbles" as const, route: "/messages" },
+    { key: "profile", label: "Profile", icon: "person" as const, route: "/profile" },
   ];
   
   export default function ContractorDashboard() {
@@ -134,6 +134,7 @@ import {
                       style={styles.tabItem}
                       onPress={() => {
                         if (tab.key === "home") return;
+                        router.push(tab.route as never);
                         // wire up other tabs later
                       }}
                     >
