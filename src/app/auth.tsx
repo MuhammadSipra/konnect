@@ -1,3 +1,7 @@
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+
+WebBrowser.maybeCompleteAuthSession();
 import { useState } from "react";
 import {
   View,
@@ -19,6 +23,10 @@ import { supabase } from "../lib/supabase";
 
 export default function AuthScreen() {
   const router = useRouter();
+  const [_, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: '21030901763-janfv3vbe7015ja91m2f9rkuu5gmle4n.apps.googleusercontent.com',
+    webClientId: '21030901763-ohkv5l5j01p78eef3epcmvq6v72lunq6.apps.googleusercontent.com',
+  });
   const [phone, setPhone] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -47,8 +55,14 @@ export default function AuthScreen() {
     }
   };
 
-  const handleGoogleSignIn = () => {
-    // Google auth flow
+  const handleGoogleSignIn = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: 'exp://192.168.0.112:8081',
+      },
+    });
+    if (error) Alert.alert('Error', error.message);
   };
 
   return (
