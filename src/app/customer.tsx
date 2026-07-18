@@ -1,12 +1,7 @@
-import { useState } from "react";
+import { supabase } from '../lib/supabase';
+import { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  StatusBar,
-  TextInput,
+  View, Text, ScrollView, Pressable, StyleSheet, StatusBar, TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -14,83 +9,52 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 const CATEGORIES = [
-  "Full Project",
-  "Interior",
-  "Civil",
-  "Electrical",
-  "Plumbing",
-  "Carpentry",
+  "Full Project", "Interior", "Civil", "Electrical", "Plumbing", "Carpentry",
 ] as const;
 
 type Category = (typeof CATEGORIES)[number];
 
-const CONTRACTORS = [
-  {
-    id: "1",
-    name: "Rajesh Kumar",
-    skill: "Civil Contractor · Full Project",
-    rating: 4.8,
-    reviews: 127,
-    distance: "1.2 km",
-  },
-  {
-    id: "2",
-    name: "Amit Patel",
-    skill: "Interior Designer · Full Project",
-    rating: 4.9,
-    reviews: 89,
-    distance: "2.4 km",
-  },
-  {
-    id: "3",
-    name: "Suresh Reddy",
-    skill: "Electrical & Plumbing · Full Project",
-    rating: 4.7,
-    reviews: 203,
-    distance: "3.1 km",
-  },
-];
-
 export default function CustomerDashboard() {
   const router = useRouter();
+  const [contractors, setContractors] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<Category>("Full Project");
 
-  const displayList = CONTRACTORS.filter((c) => {
+  useEffect(() => {
+    supabase
+      .from('profiles')
+      .select('*')
+      .ilike('user_type', 'contractor')
+      .then(({ data, error }) => {
+        console.log('CONTRACTORS:', data, 'ERROR:', error);
+        if (data) setContractors(data);
+      });
+  }, []);
+
+  const displayList = contractors.filter((c) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (
-      c.name.toLowerCase().includes(q) ||
-      c.skill.toLowerCase().includes(q)
+      c.name?.toLowerCase().includes(q) ||
+      c.skill?.toLowerCase().includes(q)
     );
   });
 
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
-      <LinearGradient
-        colors={["#0f172a", "#020617", "#0a0f1a"]}
-        style={StyleSheet.absoluteFill}
-      />
+      <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
       <View style={styles.glowGreen} />
       <View style={styles.glowBlue} />
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
-          <Pressable
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-            onPress={() => router.back()}
-          >
+          <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={22} color="#f8fafc" />
           </Pressable>
           <Text style={styles.headerTitle}>Find Contractors</Text>
           <View style={styles.headerSpacer} />
         </View>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={styles.searchWrap}>
             <Ionicons name="search" size={20} color="#64748b" />
             <TextInput
@@ -106,31 +70,13 @@ export default function CustomerDashboard() {
               </Pressable>
             )}
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categories}
-          >
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categories}>
             {CATEGORIES.map((cat) => {
               const active = activeCategory === cat;
               const isFullProject = cat === "Full Project";
               return (
-                <Pressable
-                  key={cat}
-                  onPress={() => setActiveCategory(cat)}
-                  style={[
-                    styles.chip,
-                    active && styles.chipActive,
-                    isFullProject && active && styles.chipFullProjectActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      active && styles.chipTextActive,
-                      isFullProject && active && styles.chipFullProjectText,
-                    ]}
-                  >
+                <Pressable key={cat} onPress={() => setActiveCategory(cat)} style={[styles.chip, active && styles.chipActive, isFullProject && active && styles.chipFullProjectActive]}>
+                  <Text style={[styles.chipText, active && styles.chipTextActive, isFullProject && active && styles.chipFullProjectText]}>
                     {isFullProject ? "Full Project ⭐" : cat}
                   </Text>
                 </Pressable>
@@ -154,17 +100,8 @@ export default function CustomerDashboard() {
         </ScrollView>
         <View style={styles.bottomCtaWrap}>
           <SafeAreaView edges={["bottom"]}>
-            <Pressable
-              style={({ pressed }) => [styles.postBtnWrap, pressed && styles.pressed]}
-              onPress={() => router.push("/post-project")}
-
-            >
-              <LinearGradient
-                colors={["#3b82f6", "#2563eb"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.postBtn}
-              >
+            <Pressable style={({ pressed }) => [styles.postBtnWrap, pressed && styles.pressed]} onPress={() => router.push("/post-project")}>
+              <LinearGradient colors={["#3b82f6", "#2563eb"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.postBtn}>
                 <Ionicons name="add-circle-outline" size={24} color="#ffffff" />
                 <Text style={styles.postBtnText}>Post a Project</Text>
               </LinearGradient>
@@ -176,9 +113,9 @@ export default function CustomerDashboard() {
   );
 }
 
-function ContractorCard({ contractor }: { contractor: (typeof CONTRACTORS)[0] }) {
+function ContractorCard({ contractor }: { contractor: any }) {
   const router = useRouter();
-  const initials = contractor.name.split(" ").map((n) => n[0]).join("").slice(0, 2);
+  const initials = contractor.name?.split(" ").map((n: string) => n[0]).join("").slice(0, 2) || "?";
   return (
     <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]} onPress={() => router.push("/contractor-detail")}>
       <LinearGradient colors={["#3b82f6", "#2563eb"]} style={styles.avatar}>
@@ -190,12 +127,12 @@ function ContractorCard({ contractor }: { contractor: (typeof CONTRACTORS)[0] })
         <View style={styles.cardMeta}>
           <View style={styles.ratingRow}>
             <Ionicons name="star" size={14} color="#fbbf24" />
-            <Text style={styles.ratingText}>{contractor.rating}</Text>
-            <Text style={styles.reviewText}>({contractor.reviews})</Text>
+            <Text style={styles.ratingText}>{contractor.rating || '4.8'}</Text>
+            <Text style={styles.reviewText}>({contractor.reviews || 0})</Text>
           </View>
           <View style={styles.distanceRow}>
             <Ionicons name="location-outline" size={14} color="#64748b" />
-            <Text style={styles.distanceText}>{contractor.distance}</Text>
+            <Text style={styles.distanceText}>{contractor.location || 'Mumbai'}</Text>
           </View>
         </View>
       </View>

@@ -1,3 +1,5 @@
+import { supabase } from '../lib/supabase';
+import { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -56,6 +58,61 @@ import {
   
   export default function ContractorDashboard() {
     const router = useRouter();
+    const [user, setUser] = useState<any>(null);
+    const [profile, setProfile] = useState<any>(null);
+    const [leads, setLeads] = useState<any[]>([]);
+    const [activeJobs, setActiveJobs] = useState<any[]>([]);
+    useEffect(() => {
+      const getSession = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log('SESSION:', session);
+        if (session?.user) {
+          setUser(session.user);
+        }
+      };
+      getSession();
+    
+      const getProfile = async () => {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', 1)
+          .single();
+        console.log('PROFILE:', data, 'ERROR:', error);
+        if (data) setProfile(data);
+      };
+      getProfile();
+      const getLeads = async () => {
+        const { data, error } = await supabase
+          .from('projects')
+          .select('*')
+          .order('created_at', { ascending: false });
+        console.log('LEADS:', data, 'ERROR:', error);
+        if (data) setLeads(data);
+      };
+      getLeads();
+      const getActiveJobs = async () => {
+        const { data: bids, error: bidsError } = await supabase
+          .from('bids')
+          .select('*')
+          .eq('contractor_id', 1)
+          .eq('status', 'accepted');
+      
+        console.log('BIDS:', bids, 'ERROR:', bidsError);
+      
+        if (bids && bids.length > 0) {
+          const projectIds = bids.map((b) => b.project_id);
+          const { data: projectsData, error: projectsError } = await supabase
+            .from('projects')
+            .select('*')
+            .in('id', projectIds);
+      
+          console.log('ACTIVE PROJECTS:', projectsData, 'ERROR:', projectsError);
+          if (projectsData) setActiveJobs(projectsData);
+        }
+      };
+      getActiveJobs();
+    }, []);
   
     return (
       <View style={styles.root}>
@@ -93,11 +150,16 @@ import {
                 style={styles.profileGradient}
               >
                 <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>RK</Text>
+                <Text style={styles.avatarText}>
+  {profile?.name
+    ? profile.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+    : '..'}
+</Text>
                 </View>
                 <View style={styles.profileInfo}>
-                  <Text style={styles.profileName}>Rajesh Kumar</Text>
-                  <Text style={styles.profileSkill}>Civil Contractor · Interiors</Text>
+                <Text style={styles.profileName}>{profile?.name || 'Loading...'}</Text>
+<Text style={styles.profileSkill}>{profile?.skill || ''}</Text>
+
                   <View style={styles.ratingRow}>
                     <Ionicons name="star" size={16} color="#fbbf24" />
                     <Text style={styles.ratingText}>4.8</Text>
@@ -107,17 +169,20 @@ import {
               </LinearGradient>
             </View>
   
-            {/* Active Jobs */}
-            <SectionHeader title="Active Jobs" action="See all" />
-            {ACTIVE_JOBS.map((job) => (
-              <JobCard key={job.id} job={job} />
-            ))}
+           {/* Active Jobs */}
+<SectionHeader title="Active Jobs" action="See all" />
+{activeJobs.map((job) => (
+  <JobCard key={job.id} job={job} />
+))}
   
-            {/* New Leads */}
-            <SectionHeader title="New Leads" action="View all" />
-            {NEW_LEADS.map((lead) => (
-              <LeadCard key={lead.id} lead={lead} />
-            ))}
+          {/* New Leads */}
+<SectionHeader title="New Leads" action="View all" />
+{leads
+  .filter((lead) => !activeJobs.some((job) => job.id === lead.id))
+  .map((lead) => (
+    <LeadCard key={lead.id} lead={lead} />
+  ))}
+        
   
             <View style={{ height: 100 }} />
           </ScrollView>
@@ -171,17 +236,16 @@ import {
   function JobCard({
     job,
   }: {
-    job: (typeof ACTIVE_JOBS)[0];
+    job: any;
   }) {
     return (
       <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
         <View style={styles.cardTop}>
           <Text style={styles.cardTitle}>{job.title}</Text>
           <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>{job.status}</Text>
+            <Text style={styles.statusText}>Active</Text>
           </View>
         </View>
-        <Text style={styles.cardMeta}>{job.client}</Text>
         <View style={styles.cardRow}>
           <Ionicons name="location-outline" size={14} color="#64748b" />
           <Text style={styles.cardDetail}>{job.location}</Text>
@@ -194,7 +258,7 @@ import {
   function LeadCard({
     lead,
   }: {
-    lead: (typeof NEW_LEADS)[0];
+    lead: any;
   }) {
     return (
       <Pressable style={({ pressed }) => [styles.card, styles.leadCard, pressed && styles.pressed]}>
@@ -202,17 +266,32 @@ import {
         <View style={styles.leadContent}>
           <View style={styles.cardTop}>
             <Text style={styles.cardTitle}>{lead.title}</Text>
-            <Text style={styles.leadTime}>{lead.posted}</Text>
+            <Text style={styles.leadTime}>{new Date(lead.created_at).toLocaleDateString()}</Text> 
           </View>
           <View style={styles.cardRow}>
-            <Ionicons name="location-outline" size={14} color="#64748b" />
-            <Text style={styles.cardDetail}>{lead.area}</Text>
+          <Ionicons name="location-outline" size={14} color="#64748b" />
+          <Text style={styles.cardDetail}>{lead.location}</Text>
           </View>
           <View style={styles.leadFooter}>
             <Text style={styles.cardBudget}>{lead.budget}</Text>
-            <Pressable style={styles.interestBtn}>
-              <Text style={styles.interestBtnText}>I'm Interested</Text>
-            </Pressable>
+            <Pressable
+  style={styles.interestBtn}
+  onPress={async () => {
+    const { error } = await supabase.from('bids').insert({
+      project_id: lead.id,
+      contractor_id: 1,
+      amount: 0,
+      status: 'pending',
+    });
+    if (error) {
+      console.log('BID ERROR:', error.message);
+    } else {
+      console.log('Bid placed!');
+    }
+  }}
+>
+  <Text style={styles.interestBtnText}>I'm Interested</Text>
+</Pressable>
           </View>
         </View>
       </Pressable>

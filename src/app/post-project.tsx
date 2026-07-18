@@ -1,3 +1,4 @@
+import { supabase } from '../lib/supabase';
 import { useState } from "react";
 import {
   View,
@@ -99,21 +100,30 @@ export default function PostProjectScreen() {
     description.trim().length > 0 &&
     location.trim().length > 0;
 
-  const handlePost = () => {
-    if (!canSubmit) return;
-
-    const project = {
-      title: title.trim(),
-      category,
-      description: description.trim(),
-      budget,
-      location: location.trim(),
-      timeline,
+    const handlePost = async () => {
+      console.log('handlePost called, canSubmit:', canSubmit);
+      if (!canSubmit) return;
+    
+      const { error } = await supabase
+        .from('projects')
+        .insert({
+          title: title.trim(),
+          category,
+          description: description.trim(),
+          budget,
+          location: location.trim(),
+          timeline,
+          client_id: 1,
+        });
+    
+      if (error) {
+        console.log('POST ERROR:', error.message);
+        return;
+      }
+    
+      console.log('Project posted!');
+      router.replace('/customer');
     };
-
-    console.log("Post project:", project);
-    // router.replace("/customer");
-  };
 
   return (
     <View style={styles.root}>
