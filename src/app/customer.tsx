@@ -47,13 +47,18 @@ export default function CustomerDashboard() {
       <View style={styles.glowGreen} />
       <View style={styles.glowBlue} />
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        <View style={styles.header}>
-          <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
-          </Pressable>
-          <Text style={styles.headerTitle}>Find Contractors</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+      <View style={styles.header}>
+  <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]} onPress={() => router.back()}>
+    <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+  </Pressable>
+  <Text style={styles.headerTitle}>Find Contractors</Text>
+  <Pressable
+    style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+    onPress={() => router.push('/my-projects' as never)}
+  >
+    <Ionicons name="folder-outline" size={22} color="#f8fafc" />
+  </Pressable>
+</View>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={styles.searchWrap}>
             <Ionicons name="search" size={20} color="#64748b" />

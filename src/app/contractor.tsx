@@ -277,6 +277,18 @@ import {
             <Pressable
   style={styles.interestBtn}
   onPress={async () => {
+    const { data: existing } = await supabase
+      .from('bids')
+      .select('id')
+      .eq('project_id', lead.id)
+      .eq('contractor_id', 1)
+      .maybeSingle();
+
+    if (existing) {
+      console.log('Already bid on this project!');
+      return;
+    }
+
     const { error } = await supabase.from('bids').insert({
       project_id: lead.id,
       contractor_id: 1,
