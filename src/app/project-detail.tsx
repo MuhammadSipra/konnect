@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, StatusBar, ActivityIndicator,
+  View, Text, ScrollView, Pressable, StyleSheet, StatusBar, ActivityIndicator,Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -57,19 +57,89 @@ export default function ProjectDetailScreen() {
     if (id) loadData();
   }, [id]);
 
-  const handleAccept = async (bidId: string) => {
+  const handleLock = async (bidId: string) => {
     const { error } = await supabase
       .from('bids')
-      .update({ status: 'accepted' })
+      .update({ status: 'locked' })
       .eq('id', bidId);
 
     if (error) {
-      console.log('ACCEPT ERROR:', error.message);
+      console.log('LOCK ERROR:', error.message);
       return;
     }
 
-    console.log('Bid accepted! Other bids will now be hidden.');
+    console.log('Bid locked!');
     loadData();
+  };
+  const handleCancelConfirmed = async (bidId: string) => {
+    Alert.alert(
+      "Cancel Confirmed Contractor",
+      "Are you sure? Since this contractor was confirmed, cancelling now may lead to a trust score and wallet penalty (unless this is your first cancellation this month).",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            const clientId = project.client_id;
+
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('cancellations_this_month, last_cancel_month, trust_score, wallet_balance')
+              .eq('id', clientId)
+              .single();
+
+            const currentMonth = new Date().toISOString().slice(0, 7);
+            let newCount = 1;
+            let newTrustScore = profileData?.trust_score ?? 100;
+            let newWallet = profileData?.wallet_balance ?? 0;
+
+            if (profileData?.last_cancel_month === currentMonth) {
+              newCount = (profileData?.cancellations_this_month || 0) + 1;
+            }
+
+            if (newCount > 1) {
+              newTrustScore = Math.max(0, newTrustScore - 10);
+              newWallet = Math.max(0, newWallet - 50);
+            }
+
+            await supabase
+              .from('profiles')
+              .update({
+                cancellations_this_month: newCount,
+                last_cancel_month: currentMonth,
+                trust_score: newTrustScore,
+                wallet_balance: newWallet,
+              })
+              .eq('id', clientId);
+
+              await supabase
+              .from('bids')
+              .update({ status: 'pending', not_selected_at: null })
+              .eq('project_id', id)
+              .eq('status', 'not_selected');
+
+            const { data: thisBid } = await supabase
+              .from('bids')
+              .select('cancel_count')
+              .eq('id', bidId)
+              .single();
+
+            const newCancelCount = (thisBid?.cancel_count || 0) + 1;
+
+            await supabase
+              .from('bids')
+              .update({
+                status: newCancelCount >= 2 ? 'blocked' : 'pending',
+                cancel_count: newCancelCount,
+              })
+              .eq('id', bidId);
+
+            loadData();
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -94,12 +164,13 @@ export default function ProjectDetailScreen() {
     );
   }
 
-  // If any bid is already accepted, only show that one.
-  // Otherwise show all pending bids.
-  const hasAccepted = bids.some((b) => b.status === 'accepted');
-  const visibleBids = hasAccepted
-    ? bids.filter((b) => b.status === 'accepted')
-    : bids;
+  const visibleBids = bids.filter(
+    (b) =>
+      b.status !== 'not_selected' &&
+      b.status !== 'cancelled_by_client' &&
+      b.status !== 'cancelled_by_contractor' &&
+      b.status !== 'blocked'
+  );
 
   return (
     <View style={styles.root}>
@@ -124,6 +195,14 @@ export default function ProjectDetailScreen() {
               </Text>
             </View>
             <Text style={styles.projectTitle}>{project.title}</Text>
+
+            {project.confirmation_code ? (
+              <View style={styles.codeBox}>
+                <Ionicons name="key-outline" size={14} color="#fbbf24" />
+                <Text style={styles.codeText}>Confirmation Code: {project.confirmation_code}</Text>
+              </View>
+            ) : null}
+
             <View style={styles.infoRow}>
               <Ionicons name="location-outline" size={16} color="#64748b" />
               <Text style={styles.infoText}>{project.location}</Text>
@@ -144,10 +223,8 @@ export default function ProjectDetailScreen() {
           </View>
 
           <View style={styles.bidsHeader}>
-            <Text style={styles.sectionTitle}>
-              {hasAccepted ? 'Confirmed Contractor' : 'Bids Received'}
-            </Text>
-            <Text style={styles.bidsCount}>{visibleBids.length} {hasAccepted ? '' : 'bids'}</Text>
+            <Text style={styles.sectionTitle}>Bids Received</Text>
+            <Text style={styles.bidsCount}>{visibleBids.length} bids</Text>
           </View>
 
           {visibleBids.length === 0 ? (
@@ -158,7 +235,8 @@ export default function ProjectDetailScreen() {
             visibleBids.map((bid) => {
               const name = bid.profile?.name || 'Unknown';
               const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
-              const isAccepted = bid.status === 'accepted';
+              const isLocked = bid.status === 'locked';
+              const isConfirmed = bid.status === 'confirmed';
 
               return (
                 <View key={bid.id} style={styles.bidCard}>
@@ -174,16 +252,41 @@ export default function ProjectDetailScreen() {
                     <Text style={styles.bidAmount}>
                       {bid.amount ? `₹${bid.amount}` : 'No quote'}
                     </Text>
-                    {isAccepted ? (
-                      <View style={styles.acceptedBadge}>
-                        <Text style={styles.acceptedBadgeText}>Accepted</Text>
+                    {isConfirmed ? (
+  <View style={{ alignItems: "flex-end", gap: 6 }}>
+    <View style={styles.acceptedBadge}>
+      <Text style={styles.acceptedBadgeText}>Confirmed</Text>
+    </View>
+    <Pressable
+      style={styles.messageBtn}
+      onPress={() => router.push(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=client` as never)}
+    >
+      <Ionicons name="chatbubble-outline" size={13} color="#3b82f6" />
+      <Text style={styles.messageBtnText}>Message</Text>
+    </Pressable>
+    <Pressable onPress={() => handleCancelConfirmed(bid.id)}>
+      <Text style={styles.cancelLink}>Cancel</Text>
+    </Pressable>
+  </View>
+) : isLocked ? (  
+                           <View style={{ alignItems: "flex-end", gap: 6 }}>
+                        <View style={styles.acceptedBadge}>
+                          <Text style={styles.acceptedBadgeText}>Locked</Text>
+                        </View>
+                        <Pressable
+                          style={styles.messageBtn}
+                          onPress={() => router.push(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=client` as never)}
+                        >
+                          <Ionicons name="chatbubble-outline" size={13} color="#3b82f6" />
+                          <Text style={styles.messageBtnText}>Message</Text>
+                        </Pressable>
                       </View>
                     ) : (
                       <Pressable
                         style={({ pressed }) => [styles.acceptBtn, pressed && styles.pressed]}
-                        onPress={() => handleAccept(bid.id)}
+                        onPress={() => handleLock(bid.id)}
                       >
-                        <Text style={styles.acceptBtnText}>Accept</Text>
+                        <Text style={styles.acceptBtnText}>Lock</Text>
                       </Pressable>
                     )}
                   </View>
@@ -213,7 +316,25 @@ const styles = StyleSheet.create({
   categoryBadge: { backgroundColor: "rgba(251,191,36,0.15)", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: "rgba(251,191,36,0.3)" },
   categoryText: { fontSize: 13, fontWeight: "600", color: "#fbbf24" },
   postedTime: { fontSize: 12, color: "#64748b" },
-  projectTitle: { fontSize: 22, fontWeight: "800", color: "#f8fafc", letterSpacing: -0.5, marginBottom: 14 },
+  projectTitle: { fontSize: 22, fontWeight: "800", color: "#f8fafc", letterSpacing: -0.5, marginBottom: 10 },
+  codeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(251, 191, 36, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(251, 191, 36, 0.3)",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 12,
+    alignSelf: "flex-start",
+  },
+  codeText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#fbbf24",
+  },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
   infoText: { fontSize: 14, color: "#94a3b8", fontWeight: "500" },
   sectionTitle: { fontSize: 17, fontWeight: "700", color: "#f1f5f9", marginBottom: 12 },
@@ -233,5 +354,22 @@ const styles = StyleSheet.create({
   acceptBtnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
   acceptedBadge: { backgroundColor: "rgba(34,197,94,0.15)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: "rgba(34,197,94,0.35)" },
   acceptedBadgeText: { fontSize: 12, fontWeight: "700", color: "#22c55e" },
+  cancelLink: {
+    fontSize: 11,
+    color: "#ef4444",
+    fontWeight: "600",
+  },
+  messageBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  messageBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#3b82f6",
+  },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
 });

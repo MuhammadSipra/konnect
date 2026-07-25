@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,79 +14,89 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-
-type Message = {
-  id: string;
-  text: string;
-  time: string;
-  sent: boolean;
-};
-
-const SAMPLE_MESSAGES: Message[] = [
-  {
-    id: "1",
-    text: "Hi Rajesh! I saw your profile. Are you available for a kitchen renovation?",
-    time: "10:12 AM",
-    sent: false,
-  },
-  {
-    id: "2",
-    text: "Yes, I'm available! I'd love to help with your kitchen project. What's the location?",
-    time: "10:14 AM",
-    sent: true,
-  },
-  {
-    id: "3",
-    text: "It's in Andheri West. Budget is around ₹85,000 for full renovation.",
-    time: "10:15 AM",
-    sent: false,
-  },
-  {
-    id: "4",
-    text: "That works. I can visit this weekend for a site inspection and share a detailed quote.",
-    time: "10:18 AM",
-    sent: true,
-  },
-  {
-    id: "5",
-    text: "Saturday morning works for me. Can you come around 10 AM?",
-    time: "10:20 AM",
-    sent: false,
-  },
-  {
-    id: "6",
-    text: "Done! I'll be there at 10 AM on Saturday. See you then! 👍",
-    time: "10:22 AM",
-    sent: true,
-  },
-];
+import { supabase } from "../lib/supabase";
 
 export default function ChatScreen() {
   const router = useRouter();
-  const { name } = useLocalSearchParams<{ name?: string }>();
+  const { contractorId, clientId, projectId, viewerRole } = useLocalSearchParams<{
+    contractorId?: string;
+    clientId?: string;
+    projectId?: string;
+    viewerRole?: string;
+  }>();
   const scrollRef = useRef<ScrollView>(null);
 
-  const contactName = name ?? "Priya Sharma";
-  const [messages, setMessages] = useState(SAMPLE_MESSAGES);
+  const myId = viewerRole === "client" ? Number(clientId) : Number(contractorId);
+  const otherId = viewerRole === "client" ? Number(contractorId) : Number(clientId);
+
+  const [otherName, setOtherName] = useState("Chat");
+  const [projectTitle, setProjectTitle] = useState("");
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
 
-  const handleSend = () => {
-    const trimmed = input.trim();
-    if (!trimmed) return;
+  const loadMessages = async () => {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('project_id', projectId)
+      .or(
+        `and(sender_id.eq.${myId},receiver_id.eq.${otherId}),and(sender_id.eq.${otherId},receiver_id.eq.${myId})`
+      )
+      .order('created_at', { ascending: true });
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      text: trimmed,
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      sent: true,
+    console.log('MESSAGES:', data, 'ERROR:', error);
+    if (data) setMessages(data);
+  };
+
+  useEffect(() => {
+    const loadHeaderInfo = async () => {
+      const { data: otherProfile } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', otherId)
+        .single();
+      if (otherProfile) setOtherName(otherProfile.name);
+
+      const { data: project } = await supabase
+        .from('projects')
+        .select('title')
+        .eq('id', projectId)
+        .single();
+      if (project) setProjectTitle(project.title);
     };
 
-    setMessages((prev) => [...prev, newMessage]);
+    if (otherId && projectId) {
+      loadHeaderInfo();
+      loadMessages();
+    }
+
+    // simple polling every 3 seconds until we wire up Supabase Realtime
+    const interval = setInterval(() => {
+      if (otherId && projectId) loadMessages();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [otherId, projectId]);
+
+  const handleSend = async () => {
+    const trimmed = input.trim();
+    if (!trimmed || !myId || !otherId) return;
+
     setInput("");
 
+    const { error } = await supabase.from('messages').insert({
+      project_id: Number(projectId),
+      sender_id: myId,
+      receiver_id: otherId,
+      content: trimmed,
+    });
+
+    if (error) {
+      console.log('SEND MESSAGE ERROR:', error.message);
+      return;
+    }
+
+    await loadMessages();
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
@@ -102,11 +112,11 @@ export default function ChatScreen() {
       <View style={styles.glowBlue} />
 
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-        >
+      <KeyboardAvoidingView
+  style={styles.flex}
+  behavior={Platform.OS === "ios" ? "padding" : "height"}
+  keyboardVerticalOffset={0}
+>
           {/* Header */}
           <View style={styles.header}>
             <Pressable
@@ -118,12 +128,8 @@ export default function ChatScreen() {
 
             <View style={styles.headerCenter}>
               <Text style={styles.headerName} numberOfLines={1}>
-                {contactName}
+                {otherName}
               </Text>
-              <View style={styles.onlineRow}>
-                <View style={styles.onlineDot} />
-                <Text style={styles.onlineText}>Online</Text>
-              </View>
             </View>
 
             <View style={styles.headerSpacer} />
@@ -139,44 +145,56 @@ export default function ChatScreen() {
               scrollRef.current?.scrollToEnd({ animated: false })
             }
           >
-            <View style={styles.projectTag}>
-              <Ionicons name="construct-outline" size={14} color="#22c55e" />
-              <Text style={styles.projectTagText}>Kitchen Renovation · Andheri West</Text>
-            </View>
-
-            {messages.map((msg) => (
-              <View
-                key={msg.id}
-                style={[
-                  styles.messageRow,
-                  msg.sent ? styles.messageRowSent : styles.messageRowReceived,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.bubble,
-                    msg.sent ? styles.bubbleSent : styles.bubbleReceived,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.messageText,
-                      msg.sent ? styles.messageTextSent : styles.messageTextReceived,
-                    ]}
-                  >
-                    {msg.text}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.messageTime,
-                      msg.sent ? styles.messageTimeSent : styles.messageTimeReceived,
-                    ]}
-                  >
-                    {msg.time}
-                  </Text>
-                </View>
+            {projectTitle ? (
+              <View style={styles.projectTag}>
+                <Ionicons name="construct-outline" size={14} color="#22c55e" />
+                <Text style={styles.projectTagText}>{projectTitle}</Text>
               </View>
-            ))}
+            ) : null}
+
+            {messages.length === 0 ? (
+              <Text style={styles.emptyText}>No messages yet. Say hi!</Text>
+            ) : (
+              messages.map((msg) => {
+                const sent = msg.sender_id === myId;
+                return (
+                  <View
+                    key={msg.id}
+                    style={[
+                      styles.messageRow,
+                      sent ? styles.messageRowSent : styles.messageRowReceived,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.bubble,
+                        sent ? styles.bubbleSent : styles.bubbleReceived,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.messageText,
+                          sent ? styles.messageTextSent : styles.messageTextReceived,
+                        ]}
+                      >
+                        {msg.content}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.messageTime,
+                          sent ? styles.messageTimeSent : styles.messageTimeReceived,
+                        ]}
+                      >
+                        {new Date(msg.created_at).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
           </ScrollView>
 
           {/* Input */}
@@ -271,23 +289,6 @@ const styles = StyleSheet.create({
     color: "#f8fafc",
     letterSpacing: -0.2,
   },
-  onlineRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 2,
-  },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#22c55e",
-  },
-  onlineText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#22c55e",
-  },
   headerSpacer: {
     width: 40,
   },
@@ -317,6 +318,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: "#22c55e",
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#64748b",
+    fontSize: 14,
+    marginTop: 40,
   },
   messageRow: {
     flexDirection: "row",

@@ -90,10 +90,17 @@ export default function MyProjectsScreen() {
 
                 <Text style={styles.cardTitle}>{project.title}</Text>
 
-                <View style={styles.infoRow}>
-                  <Ionicons name="location-outline" size={14} color="#64748b" />
-                  <Text style={styles.infoText}>{project.location}</Text>
-                </View>
+{project.confirmation_code ? (
+  <View style={styles.codeBox}>
+    <Ionicons name="key-outline" size={14} color="#fbbf24" />
+    <Text style={styles.codeText}>Confirmation Code: {project.confirmation_code}</Text>
+  </View>
+) : null}
+
+<View style={styles.infoRow}>
+  <Ionicons name="location-outline" size={14} color="#64748b" />
+  <Text style={styles.infoText}>{project.location}</Text>
+</View>
 
                 <View style={styles.infoRow}>
                   <Ionicons name="time-outline" size={14} color="#64748b" />
@@ -223,6 +230,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     marginBottom: 6,
+  },
+  codeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(251, 191, 36, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(251, 191, 36, 0.3)",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 10,
+    alignSelf: "flex-start",
+  },
+  codeText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#fbbf24",
   },
   infoText: {
     fontSize: 13,

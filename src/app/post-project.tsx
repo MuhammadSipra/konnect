@@ -101,8 +101,9 @@ export default function PostProjectScreen() {
     location.trim().length > 0;
 
     const handlePost = async () => {
-      console.log('handlePost called, canSubmit:', canSubmit);
       if (!canSubmit) return;
+    
+      const confirmationCode = Math.floor(1000 + Math.random() * 9000).toString();
     
       const { error } = await supabase
         .from('projects')
@@ -114,6 +115,7 @@ export default function PostProjectScreen() {
           location: location.trim(),
           timeline,
           client_id: 1,
+          confirmation_code: confirmationCode,
         });
     
       if (error) {
