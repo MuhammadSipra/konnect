@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { getCurrentProfileId, setCurrentProfile } from '../lib/currentProfile';
 import { useEffect, useState } from 'react';
 import {
     View,
@@ -9,6 +10,7 @@ import {
     StatusBar,
     Alert,
     TextInput,
+    ActivityIndicator,
   } from "react-native";
   import { SafeAreaView } from "react-native-safe-area-context";
   import { LinearGradient } from "expo-linear-gradient";
@@ -22,15 +24,48 @@ import {
     { key: "profile", label: "Profile", icon: "person" as const, route: "/profile" },
   ];
 
-  const CONTRACTOR_ID = 1; // TODO: replace with real logged-in user id once auth is wired up
-
   export default function ContractorDashboard() {
     const router = useRouter();
-    const [user, setUser] = useState<any>(null);
+    const [contractorId, setContractorId] = useState<number | null>(null);
+    const [resolvingId, setResolvingId] = useState(true);
+
     const [profile, setProfile] = useState<any>(null);
     const [leads, setLeads] = useState<any[]>([]);
     const [activeJobs, setActiveJobs] = useState<any[]>([]);
     const [bidStatuses, setBidStatuses] = useState<Record<number, string>>({});
+
+    // Resolve who's logged in — memory first, otherwise fall back to the Supabase session
+    const resolveContractorId = async (): Promise<number | null> => {
+      const cached = getCurrentProfileId();
+      if (cached) return cached;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const authUserId = sessionData?.session?.user?.id;
+      if (!authUserId) return null;
+
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('auth_user_id', authUserId)
+        .eq('user_type', 'contractor')
+        .maybeSingle();
+
+      if (profileRow) {
+        setCurrentProfile(profileRow.id, 'contractor');
+        return profileRow.id;
+      }
+      return null;
+    };
+
+    const getProfile = async (id: number) => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', id)
+        .single();
+      console.log('PROFILE:', data, 'ERROR:', error);
+      if (data) setProfile(data);
+    };
 
     const getLeads = async () => {
       const { data, error } = await supabase
@@ -41,11 +76,11 @@ import {
       if (data) setLeads(data);
     };
 
-    const getActiveJobs = async () => {
+    const getActiveJobs = async (id: number) => {
       const { data: bids, error: bidsError } = await supabase
         .from('bids')
         .select('*')
-        .eq('contractor_id', CONTRACTOR_ID)
+        .eq('contractor_id', id)
         .in('status', ['accepted', 'confirmed']);
 
       console.log('BIDS:', bids, 'ERROR:', bidsError);
@@ -64,11 +99,11 @@ import {
       }
     };
 
-    const getBidStatuses = async () => {
+    const getBidStatuses = async (id: number) => {
       const { data, error } = await supabase
         .from('bids')
         .select('project_id, status')
-        .eq('contractor_id', CONTRACTOR_ID);
+        .eq('contractor_id', id);
 
       console.log('BID STATUSES:', data, 'ERROR:', error);
 
@@ -80,51 +115,44 @@ import {
         setBidStatuses(map);
       }
     };
-    const cleanupExpiredBids = async () => {
+
+    const cleanupExpiredBids = async (id: number) => {
       const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
       await supabase
         .from('bids')
         .delete()
-        .eq('contractor_id', CONTRACTOR_ID)
+        .eq('contractor_id', id)
         .eq('status', 'not_selected')
         .lt('not_selected_at', sixHoursAgo);
     };
 
-    const refreshAll = async () => {
-      await cleanupExpiredBids();
-      await Promise.all([getLeads(), getActiveJobs(), getBidStatuses()]);
+    const refreshAll = async (id: number) => {
+      await cleanupExpiredBids(id);
+      await Promise.all([getLeads(), getActiveJobs(id), getBidStatuses(id)]);
     };
 
     useEffect(() => {
-      const getSession = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log('SESSION:', session);
-        if (session?.user) {
-          setUser(session.user);
+      const init = async () => {
+        const id = await resolveContractorId();
+        setContractorId(id);
+        setResolvingId(false);
+
+        if (id) {
+          await getProfile(id);
+          await refreshAll(id);
         }
       };
-      getSession();
-
-      const getProfile = async () => {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', CONTRACTOR_ID)
-          .single();
-        console.log('PROFILE:', data, 'ERROR:', error);
-        if (data) setProfile(data);
-      };
-      getProfile();
-
-      refreshAll();
+      init();
     }, []);
 
     const handleInterested = async (leadId: number) => {
+      if (!contractorId) return;
+
       const { data: existing } = await supabase
         .from('bids')
         .select('id')
         .eq('project_id', leadId)
-        .eq('contractor_id', CONTRACTOR_ID)
+        .eq('contractor_id', contractorId)
         .maybeSingle();
 
       if (existing) {
@@ -134,7 +162,7 @@ import {
 
       const { error } = await supabase.from('bids').insert({
         project_id: leadId,
-        contractor_id: CONTRACTOR_ID,
+        contractor_id: contractorId,
         amount: 0,
         status: 'pending',
       });
@@ -143,11 +171,12 @@ import {
         console.log('BID ERROR:', error.message);
       } else {
         console.log('Bid placed!');
-        refreshAll();
+        refreshAll(contractorId);
       }
     };
 
     const handleCancel = async (leadId: number) => {
+      if (!contractorId) return;
       const status = bidStatuses[leadId];
       const isConfirmedBid = status === 'confirmed' || status === 'accepted';
 
@@ -166,7 +195,7 @@ import {
                 const { data: profileData } = await supabase
                   .from('profiles')
                   .select('cancellations_this_month, last_cancel_month, trust_score, wallet_balance')
-                  .eq('id', CONTRACTOR_ID)
+                  .eq('id', contractorId)
                   .single();
 
                 const currentMonth = new Date().toISOString().slice(0, 7);
@@ -191,21 +220,19 @@ import {
                     trust_score: newTrustScore,
                     wallet_balance: newWallet,
                   })
-                  .eq('id', CONTRACTOR_ID);
+                  .eq('id', contractorId);
 
-                // Reopen the project for the other contractors who were sidelined
                 await supabase
                   .from('bids')
                   .update({ status: 'pending', not_selected_at: null })
                   .eq('project_id', leadId)
                   .eq('status', 'not_selected');
 
-                // Track this contractor's cancellations on THIS specific project
                 const { data: myBid } = await supabase
                   .from('bids')
                   .select('id, cancel_count')
                   .eq('project_id', leadId)
-                  .eq('contractor_id', CONTRACTOR_ID)
+                  .eq('contractor_id', contractorId)
                   .single();
 
                 const newCancelCount = (myBid?.cancel_count || 0) + 1;
@@ -218,15 +245,14 @@ import {
                   })
                   .eq('id', myBid?.id);
               } else {
-                // Withdrawing interest before confirmation — no penalty, free to re-interest anytime
                 await supabase
                   .from('bids')
                   .delete()
                   .eq('project_id', leadId)
-                  .eq('contractor_id', CONTRACTOR_ID);
+                  .eq('contractor_id', contractorId);
               }
 
-              refreshAll();
+              refreshAll(contractorId);
             },
           },
         ]
@@ -234,6 +260,8 @@ import {
     };
 
     const handleConfirmCode = async (leadId: number, enteredCode: string) => {
+      if (!contractorId) return;
+
       const { data: projectData, error: projectError } = await supabase
         .from('projects')
         .select('confirmation_code')
@@ -262,7 +290,7 @@ import {
                 .from('bids')
                 .select('id')
                 .eq('project_id', leadId)
-                .eq('contractor_id', CONTRACTOR_ID)
+                .eq('contractor_id', contractorId)
                 .single();
 
               if (myBid) {
@@ -276,14 +304,40 @@ import {
                 .from('bids')
                 .update({ status: 'not_selected', not_selected_at: new Date().toISOString() })
                 .eq('project_id', leadId)
-                .neq('contractor_id', CONTRACTOR_ID);
+                .neq('contractor_id', contractorId);
 
-              refreshAll();
+              refreshAll(contractorId);
             },
           },
         ]
       );
     };
+
+    if (resolvingId) {
+      return (
+        <View style={styles.root}>
+          <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
+          <SafeAreaView style={styles.centerWrap}>
+            <ActivityIndicator size="large" color="#22c55e" />
+          </SafeAreaView>
+        </View>
+      );
+    }
+
+    if (!contractorId) {
+      return (
+        <View style={styles.root}>
+          <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
+          <SafeAreaView style={styles.centerWrap}>
+            <Text style={styles.emptyText}>Please log in to continue</Text>
+            <Pressable style={styles.loginRedirectBtn} onPress={() => router.replace('/welcome')}>
+              <Text style={styles.loginRedirectBtnText}>Go to Login</Text>
+            </Pressable>
+          </SafeAreaView>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.root}>
         <StatusBar barStyle="light-content" />
@@ -341,7 +395,12 @@ import {
             {/* Active Jobs */}
             <SectionHeader title="Active Jobs" action="See all" />
             {activeJobs.map((job) => (
-              <JobCard key={job.id} job={job} onCancel={() => handleCancel(job.id)} />
+              <JobCard
+                key={job.id}
+                job={job}
+                contractorId={contractorId}
+                onCancel={() => handleCancel(job.id)}
+              />
             ))}
 
             {/* New Leads */}
@@ -376,7 +435,6 @@ import {
                       onPress={() => {
                         if (tab.key === "home") return;
                         router.push(tab.route as never);
-                        // wire up other tabs later
                       }}
                     >
                       <Ionicons
@@ -411,9 +469,11 @@ import {
 
   function JobCard({
     job,
+    contractorId,
     onCancel,
   }: {
     job: any;
+    contractorId: number;
     onCancel: () => void;
   }) {
     const router = useRouter();
@@ -436,7 +496,7 @@ import {
               style={styles.messageBtn}
               onPress={() =>
                 router.push(
-                  `/chat?contractorId=${CONTRACTOR_ID}&projectId=${job.id}&clientId=${job.client_id}&viewerRole=contractor` as never
+                  `/chat?contractorId=${contractorId}&projectId=${job.id}&clientId=${job.client_id}&viewerRole=contractor` as never
                 )
               }
             >
@@ -541,12 +601,12 @@ import {
               <View style={styles.cancelledBadge}>
                 <Text style={styles.cancelledBadgeText}>Went to another contractor</Text>
               </View>
-              ) : (
-                <Pressable style={styles.interestBtn} onPress={onInterested}>
-                  <Text style={styles.interestBtnText}>I'm Interested</Text>
-                </Pressable>
-              )}
-                     </View>
+            ) : (
+              <Pressable style={styles.interestBtn} onPress={onInterested}>
+                <Text style={styles.interestBtnText}>I'm Interested</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       </Pressable>
     );
@@ -577,6 +637,28 @@ import {
     },
     safe: {
       flex: 1,
+    },
+    centerWrap: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 16,
+    },
+    emptyText: {
+      fontSize: 15,
+      color: "#64748b",
+      fontWeight: "500",
+    },
+    loginRedirectBtn: {
+      backgroundColor: "#3b82f6",
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 12,
+    },
+    loginRedirectBtnText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: "#fff",
     },
     header: {
       flexDirection: "row",
@@ -732,11 +814,6 @@ import {
       color: "#22c55e",
       textTransform: "uppercase",
     },
-    cardMeta: {
-      marginTop: 6,
-      fontSize: 14,
-      color: "#94a3b8",
-    },
     cardRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -819,6 +896,18 @@ import {
       color: "#ef4444",
       fontWeight: "600",
     },
+    messageBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    messageBtnText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: "#3b82f6",
+    },
     codeEntryWrap: {
       marginTop: 12,
       backgroundColor: "rgba(251, 191, 36, 0.08)",
@@ -886,18 +975,6 @@ import {
       fontSize: 11,
       fontWeight: "600",
       color: "#64748b",
-    },
-    messageBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-    },
-    messageBtnText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: "#3b82f6",
     },
     tabLabelActive: {
       color: "#22c55e",

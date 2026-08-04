@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { getCurrentProfileId, setCurrentProfile } from '../lib/currentProfile';
 import { useEffect, useState } from 'react';
 import {
   View,
@@ -14,17 +15,49 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+// Resolve who's logged in — memory first, otherwise fall back to the Supabase session
+async function resolveClientId(): Promise<number | null> {
+  const cached = getCurrentProfileId();
+  if (cached) return cached;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const authUserId = sessionData?.session?.user?.id;
+  if (!authUserId) return null;
+
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('auth_user_id', authUserId)
+    .eq('user_type', 'client')
+    .maybeSingle();
+
+  if (profileRow) {
+    setCurrentProfile(profileRow.id, 'client');
+    return profileRow.id;
+  }
+  return null;
+}
+
 export default function MyProjectsScreen() {
   const router = useRouter();
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loggedIn, setLoggedIn] = useState(true);
 
   useEffect(() => {
     const getMyProjects = async () => {
+      const clientId = await resolveClientId();
+
+      if (!clientId) {
+        setLoggedIn(false);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('projects')
         .select('*')
-        .eq('client_id', 1)
+        .eq('client_id', clientId)
         .order('created_at', { ascending: false });
 
       console.log('MY PROJECTS:', data, 'ERROR:', error);
@@ -62,6 +95,11 @@ export default function MyProjectsScreen() {
           <View style={styles.centerWrap}>
             <ActivityIndicator size="large" color="#3b82f6" />
           </View>
+        ) : !loggedIn ? (
+          <View style={styles.centerWrap}>
+            <Ionicons name="lock-closed-outline" size={48} color="#334155" />
+            <Text style={styles.emptyText}>Please log in to see your projects</Text>
+          </View>
         ) : projects.length === 0 ? (
           <View style={styles.centerWrap}>
             <Ionicons name="folder-open-outline" size={48} color="#334155" />
@@ -90,17 +128,17 @@ export default function MyProjectsScreen() {
 
                 <Text style={styles.cardTitle}>{project.title}</Text>
 
-{project.confirmation_code ? (
-  <View style={styles.codeBox}>
-    <Ionicons name="key-outline" size={14} color="#fbbf24" />
-    <Text style={styles.codeText}>Confirmation Code: {project.confirmation_code}</Text>
-  </View>
-) : null}
+                {project.confirmation_code ? (
+                  <View style={styles.codeBox}>
+                    <Ionicons name="key-outline" size={14} color="#fbbf24" />
+                    <Text style={styles.codeText}>Confirmation Code: {project.confirmation_code}</Text>
+                  </View>
+                ) : null}
 
-<View style={styles.infoRow}>
-  <Ionicons name="location-outline" size={14} color="#64748b" />
-  <Text style={styles.infoText}>{project.location}</Text>
-</View>
+                <View style={styles.infoRow}>
+                  <Ionicons name="location-outline" size={14} color="#64748b" />
+                  <Text style={styles.infoText}>{project.location}</Text>
+                </View>
 
                 <View style={styles.infoRow}>
                   <Ionicons name="time-outline" size={14} color="#64748b" />
@@ -225,12 +263,6 @@ const styles = StyleSheet.create({
     color: "#f8fafc",
     marginBottom: 10,
   },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 6,
-  },
   codeBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -248,6 +280,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#fbbf24",
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
   },
   infoText: {
     fontSize: 13,

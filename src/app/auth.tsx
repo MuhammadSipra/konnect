@@ -1,3 +1,6 @@
+import { setPendingRole } from "../lib/pendingRole";
+import { OTPWidget } from '@msg91comm/sendotp-react-native';
+import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
@@ -17,12 +20,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 
 export default function AuthScreen() {
   const router = useRouter();
+  const { role } = useLocalSearchParams<{ role?: string }>();
   const [_, response, promptAsync] = Google.useAuthRequest({
     androidClientId: '21030901763-janfv3vbe7015ja91m2f9rkuu5gmle4n.apps.googleusercontent.com',
     webClientId: '21030901763-ohkv5l5j01p78eef3epcmvq6v72lunq6.apps.googleusercontent.com',
@@ -40,14 +44,19 @@ export default function AuthScreen() {
     if (phone.length !== 10 || loading) return;
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: "+91" + phone,
-      });
-      if (error) {
-        Alert.alert("Error", error.message);
-        return;
+      const data = { identifier: '91' + phone };
+      const response = await OTPWidget.sendOTP(data);
+      console.log('SEND OTP RESPONSE:', JSON.stringify(response));
+  
+      if (response.type === 'success') {
+        router.push({
+          pathname: "/otp",
+          params: { phone: "+91" + phone, role: role || "client", reqId: response.message },
+        });
+      
+      } else {
+        Alert.alert("Error", "Could not send OTP. Please try again.");
       }
-      router.push({ pathname: "/otp", params: { phone: "+91" + phone } });
     } catch (err) {
       Alert.alert("Error", err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -56,13 +65,26 @@ export default function AuthScreen() {
   };
 
   const handleGoogleSignIn = async () => {
+    setPendingRole(role || "client");
+    const redirectUrl = makeRedirectUri();
+    console.log('REDIRECT URL:', redirectUrl);
+  
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: 'exp://192.168.0.112:8081',
+        redirectTo: redirectUrl,
+        skipBrowserRedirect: true,
       },
     });
-    if (error) Alert.alert('Error', error.message);
+  
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+  
+    if (data?.url) {
+      await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+    }
   };
 
   return (

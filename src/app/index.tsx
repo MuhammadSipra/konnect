@@ -1,16 +1,24 @@
-import { View, Text, Pressable, StyleSheet, StatusBar } from "react-native";
+import { useEffect } from "react";
+import { View, Text, StyleSheet, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 
-export default function WelcomeScreen() {
+export default function SplashScreen() {
   const router = useRouter();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      router.replace("/welcome");
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
 
-      {/* Background glow */}
       <LinearGradient
         colors={["#0f172a", "#020617", "#0a0f1a"]}
         style={StyleSheet.absoluteFill}
@@ -20,53 +28,14 @@ export default function WelcomeScreen() {
 
       <SafeAreaView style={styles.safe}>
         <View style={styles.content}>
-          {/* Brand */}
-          <View style={styles.brandBlock}>
-            <Text style={styles.title}>Konnect</Text>
-            <Text style={styles.byline}>by Sipra</Text>
-            <Text style={styles.tagline}>India's #1 Contractor Marketplace</Text>
+          {/* Logo placeholder — swap for an <Image> later without touching layout */}
+          <View style={styles.logoCircle}>
+            <Text style={styles.logoLetter}>K</Text>
           </View>
 
-          {/* Buttons */}
-          <View style={styles.actions}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.buttonWrap,
-                pressed && styles.buttonPressed,
-              ]}
-              onPress={() => router.push("/contractor")}
-            >
-              <LinearGradient
-                colors={["#22c55e", "#16a34a"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.button}
-              >
-                <Text style={styles.buttonText}>I'm a Contractor</Text>
-                <Text style={styles.buttonSubtext}>Find jobs & grow your business</Text>
-              </LinearGradient>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.buttonWrap,
-                pressed && styles.buttonPressed,
-              ]}
-              onPress={() => router.push("/customer")}
-            >
-              <LinearGradient
-                colors={["#3b82f6", "#2563eb"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.button}
-              >
-                <Text style={styles.buttonText}>I Need Work Done</Text>
-                <Text style={styles.buttonSubtext}>Hire trusted contractors near you</Text>
-              </LinearGradient>
-            </Pressable>
-          </View>
-
-          <Text style={styles.footer}>Trusted by contractors across India</Text>
+          <Text style={styles.title}>Konnect</Text>
+          <Text style={styles.byline}>by Sipra</Text>
+          <Text style={styles.tagline}>India's #1 Contractor Marketplace</Text>
         </View>
       </SafeAreaView>
     </View>
@@ -101,71 +70,47 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 28,
-    paddingTop: 48,
-    paddingBottom: 32,
-    justifyContent: "space-between",
   },
-  brandBlock: {
-    marginTop: 24,
+  logoCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 24,
+    backgroundColor: "#22c55e",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+    shadowColor: "#22c55e",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  logoLetter: {
+    fontSize: 44,
+    fontWeight: "800",
+    color: "#ffffff",
   },
   title: {
-    fontSize: 56,
+    fontSize: 40,
     fontWeight: "800",
     color: "#f8fafc",
-    letterSpacing: -1.5,
+    letterSpacing: -1,
   },
   byline: {
-    marginTop: 6,
-    fontSize: 16,
+    marginTop: 4,
+    fontSize: 14,
     fontWeight: "500",
     color: "#64748b",
     letterSpacing: 0.3,
   },
   tagline: {
-    marginTop: 20,
-    fontSize: 18,
+    marginTop: 16,
+    fontSize: 15,
     fontWeight: "600",
     color: "#94a3b8",
-    lineHeight: 26,
-  },
-  actions: {
-    gap: 16,
-  },
-  buttonWrap: {
-    borderRadius: 16,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  buttonPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.98 }],
-  },
-  button: {
-    paddingVertical: 22,
-    paddingHorizontal: 24,
-    borderRadius: 16,
-  },
-  buttonText: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#ffffff",
-    letterSpacing: -0.3,
-  },
-  buttonSubtext: {
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: "500",
-    color: "rgba(255, 255, 255, 0.85)",
-  },
-  footer: {
     textAlign: "center",
-    fontSize: 13,
-    color: "#475569",
-    fontWeight: "500",
   },
 });

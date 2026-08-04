@@ -1,3 +1,4 @@
+import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import { useState, useRef, useEffect } from "react";
 import {
   View,
@@ -13,6 +14,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { supabase } from "../lib/supabase";
+import { Alert } from "react-native";
 
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
@@ -27,7 +30,8 @@ function maskPhone(phone: string): string {
 
 export default function OtpScreen() {
   const router = useRouter();
-  const { phone = "" } = useLocalSearchParams<{ phone?: string }>();
+  const { phone = "", role = "client", reqId = "" } = useLocalSearchParams<{ phone?: string; role?: string; reqId?: string }>(); 
+const [verifying, setVerifying] = useState(false);
 
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [countdown, setCountdown] = useState(RESEND_SECONDS);
@@ -76,10 +80,47 @@ export default function OtpScreen() {
     }
   };
 
-  const handleVerify = () => {
-    if (!isComplete) return;
-    // Verify OTP with backend, then navigate
-    // router.replace("/contractor");
+  const handleVerify = async () => {
+    import { setCurrentProfile } from "../lib/currentProfile";
+    if (!isComplete || verifying) return;
+    setVerifying(true);
+  
+    try {
+      const body = { reqId: String(reqId), otp: otpValue };
+      const response = await OTPWidget.verifyOTP(body);
+      console.log('VERIFY RESPONSE:', JSON.stringify(response));
+  
+      if (response.type !== 'success') {
+        Alert.alert("Invalid Code", "The OTP you entered is incorrect or expired.");
+        setVerifying(false);
+        return;
+      }
+  
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('phone', String(phone))
+        .eq('user_type', role)
+        .maybeSingle();
+  
+      setVerifying(false);
+      if (existingProfile) {
+        if (role === 'contractor' && existingProfile.verification_status !== 'approved') {
+          router.replace('/verification-pending');
+        } else {
+          router.replace(role === 'contractor' ? '/contractor' : '/customer');
+        }
+      }
+      else {
+        router.replace({
+          pathname: '/signup',
+          params: { role: String(role), phone: String(phone) },
+        });
+      }
+    } catch (err) {
+      setVerifying(false);
+      Alert.alert("Error", "Something went wrong verifying the OTP.");
+    }
   };
 
   const handleResend = () => {

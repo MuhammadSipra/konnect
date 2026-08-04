@@ -1,4 +1,3 @@
-import { supabase } from '../lib/supabase';
 import { useState } from "react";
 import {
   View,
@@ -10,11 +9,14 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { supabase } from '../lib/supabase';
+import { getCurrentProfileId, setCurrentProfile } from '../lib/currentProfile';
 
 const CATEGORIES = [
   "Full Project",
@@ -85,6 +87,29 @@ function ChipGroup<T extends string>({
   );
 }
 
+// Resolve who's logged in — memory first, otherwise fall back to the Supabase session
+async function resolveClientId(): Promise<number | null> {
+  const cached = getCurrentProfileId();
+  if (cached) return cached;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const authUserId = sessionData?.session?.user?.id;
+  if (!authUserId) return null;
+
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('auth_user_id', authUserId)
+    .eq('user_type', 'client')
+    .maybeSingle();
+
+  if (profileRow) {
+    setCurrentProfile(profileRow.id, 'client');
+    return profileRow.id;
+  }
+  return null;
+}
+
 export default function PostProjectScreen() {
   const router = useRouter();
 
@@ -94,38 +119,50 @@ export default function PostProjectScreen() {
   const [budget, setBudget] = useState<Budget>("1L-5L");
   const [location, setLocation] = useState("");
   const [timeline, setTimeline] = useState<Timeline>("flexible");
+  const [posting, setPosting] = useState(false);
 
   const canSubmit =
     title.trim().length > 0 &&
     description.trim().length > 0 &&
     location.trim().length > 0;
 
-    const handlePost = async () => {
-      if (!canSubmit) return;
-    
-      const confirmationCode = Math.floor(1000 + Math.random() * 9000).toString();
-    
-      const { error } = await supabase
-        .from('projects')
-        .insert({
-          title: title.trim(),
-          category,
-          description: description.trim(),
-          budget,
-          location: location.trim(),
-          timeline,
-          client_id: 1,
-          confirmation_code: confirmationCode,
-        });
-    
-      if (error) {
-        console.log('POST ERROR:', error.message);
-        return;
-      }
-    
-      console.log('Project posted!');
-      router.replace('/customer');
-    };
+  const handlePost = async () => {
+    if (!canSubmit || posting) return;
+    setPosting(true);
+
+    const clientId = await resolveClientId();
+    if (!clientId) {
+      Alert.alert("Error", "Please log in again to post a project.");
+      setPosting(false);
+      return;
+    }
+
+    const confirmationCode = Math.floor(1000 + Math.random() * 9000).toString();
+
+    const { error } = await supabase
+      .from('projects')
+      .insert({
+        title: title.trim(),
+        category,
+        description: description.trim(),
+        budget,
+        location: location.trim(),
+        timeline,
+        client_id: clientId,
+        confirmation_code: confirmationCode,
+      });
+
+    setPosting(false);
+
+    if (error) {
+      console.log('POST ERROR:', error.message);
+      Alert.alert("Error", "Could not post your project. Please try again.");
+      return;
+    }
+
+    console.log('Project posted!');
+    router.replace('/customer');
+  };
 
   return (
     <View style={styles.root}>
@@ -230,15 +267,15 @@ export default function PostProjectScreen() {
               <Pressable
                 style={({ pressed }) => [
                   styles.postBtnWrap,
-                  !canSubmit && styles.postBtnDisabled,
-                  pressed && canSubmit && styles.pressed,
+                  (!canSubmit || posting) && styles.postBtnDisabled,
+                  pressed && canSubmit && !posting && styles.pressed,
                 ]}
                 onPress={handlePost}
-                disabled={!canSubmit}
+                disabled={!canSubmit || posting}
               >
                 <LinearGradient
                   colors={
-                    canSubmit
+                    canSubmit && !posting
                       ? ["#3b82f6", "#2563eb"]
                       : ["#334155", "#1e293b"]
                   }
@@ -247,7 +284,7 @@ export default function PostProjectScreen() {
                   style={styles.postBtn}
                 >
                   <Ionicons name="send" size={20} color="#ffffff" />
-                  <Text style={styles.postBtnText}>Post Project</Text>
+                  <Text style={styles.postBtnText}>{posting ? "Posting..." : "Post Project"}</Text>
                 </LinearGradient>
               </Pressable>
             </SafeAreaView>
