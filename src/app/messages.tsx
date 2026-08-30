@@ -1,54 +1,30 @@
-import { useState, useMemo } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  StatusBar,
-  TextInput,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-
-const CONVERSATIONS = [
-  {
-    id: "1",
-    name: "Priya Sharma",
-    lastMessage: "When can you start the kitchen work?",
-    time: "10:30 AM",
-    unread: 2,
-    avatarColor: "#22c55e",
-  },
-  {
-    id: "2",
-    name: "Rahul Mehta",
-    lastMessage: "Thanks for the quote! Looks good.",
-    time: "Yesterday",
-    unread: 0,
-    avatarColor: "#3b82f6",
-  },
-  {
-    id: "3",
-    name: "Amit Patel",
-    lastMessage: "Are you available this weekend?",
-    time: "Mon",
-    unread: 1,
-    avatarColor: "#a855f7",
-  },
-];
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { getCurrentProfileId, getCurrentRole } from '../lib/currentProfile';
+import { supabase } from '../lib/supabase';
 
 const TABS = [
   { key: "home", label: "Home", icon: "home" as const, route: "/contractor" },
-  { key: "jobs", label: "Jobs", icon: "briefcase" as const, route: "/contractor" },
+  { key: "jobs", label: "Jobs", icon: "briefcase" as const, route: "/jobs" },
   { key: "messages", label: "Messages", icon: "chatbubbles" as const, route: "/messages" },
-  { key: "profile", label: "Profile", icon: "person" as const, route: "/contractor" },
+  { key: "profile", label: "Profile", icon: "person" as const, route: "/profile" },
 ];
 
 function getInitials(name: string): string {
-  return name
+  return (name || "?")
     .split(" ")
     .map((part) => part[0])
     .join("")
@@ -56,27 +32,123 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
+const AVATAR_COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#f59e0b", "#ef4444"];
+
+async function resolveMyIdentity(): Promise<{ id: number; role: string } | null> {
+  const cachedId = getCurrentProfileId();
+  const cachedRole = getCurrentRole();
+  if (cachedId && cachedRole) return { id: cachedId, role: cachedRole };
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const authUserId = sessionData?.session?.user?.id;
+  if (!authUserId) return null;
+
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('id, user_type')
+    .eq('auth_user_id', authUserId)
+    .maybeSingle();
+
+  if (profileRow) return { id: profileRow.id, role: profileRow.user_type };
+  return null;
+}
+
 export default function MessagesScreen() {
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [myId, setMyId] = useState<number | null>(null);
+  const [myRole, setMyRole] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<any[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      const identity = await resolveMyIdentity();
+      if (!identity) {
+        setLoading(false);
+        return;
+      }
+      setMyId(identity.id);
+      setMyRole(identity.role);
+
+      const { data: messages } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`sender_id.eq.${identity.id},receiver_id.eq.${identity.id}`)
+        .order('created_at', { ascending: false });
+
+      if (!messages || messages.length === 0) {
+        setLoading(false);
+        return;
+      }
+      const grouped: Record<string, any> = {};
+      for (const m of messages) {
+        const otherId = m.sender_id === identity.id ? m.receiver_id : m.sender_id;
+        const key = `${m.project_id}-${otherId}`;
+        if (!grouped[key]) {
+          grouped[key] = {
+            projectId: m.project_id,
+            otherId,
+            lastMessage: m.content,
+            time: m.created_at,
+            unread: 0,
+          };
+        }
+        if (m.receiver_id === identity.id && !m.is_read) {
+          grouped[key].unread += 1;
+        }
+      }
+      
+      const groupList = Object.values(grouped);
+
+      const otherIds = [...new Set(groupList.map((g: any) => g.otherId))];
+      const projectIds = [...new Set(groupList.map((g: any) => g.projectId))];
+
+      const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', otherIds);
+      const { data: projects } = await supabase.from('projects').select('id, title').in('id', projectIds);
+
+      const merged = groupList
+        .map((g: any) => ({
+          ...g,
+          name: profiles?.find((p) => p.id === g.otherId)?.name || 'Unknown',
+          projectTitle: projects?.find((p) => p.id === g.projectId)?.title || '',
+        }))
+        .sort((a: any, b: any) => new Date(b.time).getTime() - new Date(a.time).getTime());
+
+      setConversations(merged);
+      setLoading(false);
+    };
+    load();
+  }, []);
 
   const filteredConversations = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return CONVERSATIONS;
-    return CONVERSATIONS.filter(
-      (conv) =>
-        conv.name.toLowerCase().includes(query) ||
-        conv.lastMessage.toLowerCase().includes(query)
+    if (!query) return conversations;
+    return conversations.filter(
+      (c) =>
+        c.name.toLowerCase().includes(query) ||
+        c.lastMessage.toLowerCase().includes(query)
     );
-  }, [search]);
+  }, [search, conversations]);
 
   const handleTabPress = (tab: (typeof TABS)[number]) => {
     if (tab.key === "messages") return;
-    router.push(tab.route as "/contractor" | "/messages");
+    router.push(tab.route as never);
   };
 
-  const handleConversationPress = (id: string) => {
-     router.push({ pathname: "/chat", params: { id } });
+  const handleConversationPress = (conv: any) => {
+    if (!myId || !myRole) return;
+    const contractorId = myRole === 'contractor' ? myId : conv.otherId;
+    const clientId = myRole === 'client' ? myId : conv.otherId;
+    router.push({
+      pathname: "/chat",
+      params: {
+        contractorId: String(contractorId),
+        clientId: String(clientId),
+        projectId: String(conv.projectId),
+        viewerRole: myRole,
+      },
+    } as never);
   };
 
   return (
@@ -113,61 +185,70 @@ export default function MessagesScreen() {
           )}
         </View>
 
-        {/* Conversation list */}
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {filteredConversations.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="chatbubbles-outline" size={40} color="#334155" />
-              <Text style={styles.emptyText}>No conversations found</Text>
-            </View>
-          ) : (
-            filteredConversations.map((conv) => (
-              <Pressable
-                key={conv.id}
-                style={({ pressed }) => [
-                  styles.conversationRow,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() => handleConversationPress(conv.id)}
-              >
-                <View
-                  style={[styles.avatar, { backgroundColor: conv.avatarColor }]}
+        {loading ? (
+          <View style={styles.emptyState}>
+            <ActivityIndicator size="large" color="#22c55e" />
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {filteredConversations.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="chatbubbles-outline" size={40} color="#334155" />
+                <Text style={styles.emptyText}>No conversations yet</Text>
+              </View>
+            ) : (
+              filteredConversations.map((conv, i) => (
+                <Pressable
+                  key={`${conv.projectId}-${conv.otherId}`}
+                  style={({ pressed }) => [
+                    styles.conversationRow,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => handleConversationPress(conv)}
                 >
-                  <Text style={styles.avatarText}>{getInitials(conv.name)}</Text>
-                </View>
-
-                <View style={styles.conversationBody}>
-                  <View style={styles.conversationTop}>
-                    <Text style={styles.conversationName} numberOfLines={1}>
-                      {conv.name}
-                    </Text>
-                    <Text style={styles.conversationTime}>{conv.time}</Text>
+                  <View
+                    style={[styles.avatar, { backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }]}
+                  >
+                    <Text style={styles.avatarText}>{getInitials(conv.name)}</Text>
                   </View>
 
-                  <View style={styles.conversationBottom}>
-                    <Text style={styles.lastMessage} numberOfLines={1}>
-                      {conv.lastMessage}
-                    </Text>
-                    {conv.unread > 0 && (
-                      <View style={styles.unreadBadge}>
-                        <Text style={styles.unreadText}>{conv.unread}</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              </Pressable>
-            ))
-          )}
+                  <View style={styles.conversationBody}>
+  <View style={styles.conversationTop}>
+    <Text style={styles.conversationName} numberOfLines={1}>
+      {conv.name}
+    </Text>
+    <Text style={styles.conversationTime}>
+      {new Date(conv.time).toLocaleDateString()}
+    </Text>
+  </View>
+  {conv.projectTitle ? (
+    <Text style={styles.projectTag} numberOfLines={1}>{conv.projectTitle}</Text>
+  ) : null}
+  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+    <Text style={[styles.lastMessage, { flex: 1 }]} numberOfLines={1}>
+      {conv.lastMessage}
+    </Text>
+    {conv.unread > 0 && (
+      <View style={styles.unreadBadge}>
+        <Text style={styles.unreadText}>{conv.unread}</Text>
+      </View>
+    )}
+  </View>
+</View>
+                </Pressable>
+              ))
+            )}
 
-          <View style={{ height: 100 }} />
-        </ScrollView>
+            <View style={{ height: 100 }} />
+          </ScrollView>
+        )}
 
-        {/* Bottom Tab Bar — same as contractor dashboard */}
+        {/* Bottom Tab Bar */}
         <View style={styles.tabBarWrap}>
           <SafeAreaView edges={["bottom"]}>
             <View style={styles.tabBar}>
@@ -287,7 +368,7 @@ const styles = StyleSheet.create({
   },
   conversationBody: {
     flex: 1,
-    gap: 6,
+    gap: 3,
   },
   conversationTop: {
     flexDirection: "row",
@@ -306,13 +387,12 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#64748b",
   },
-  conversationBottom: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+  projectTag: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#22c55e",
   },
   lastMessage: {
-    flex: 1,
     fontSize: 14,
     color: "#94a3b8",
     fontWeight: "500",

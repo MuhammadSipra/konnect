@@ -1,10 +1,10 @@
 import { OTPWidget } from '@msg91comm/sendotp-react-native';
-import { useEffect } from "react";
-import { Stack, useRouter } from "expo-router";
 import * as Linking from "expo-linking";
-import { supabase } from "../lib/supabase";
+import { Stack, useRouter } from "expo-router";
+import { useEffect } from "react";
+import { setCurrentProfile } from "../lib/currentProfile";
 import { getPendingRole } from "../lib/pendingRole";
-
+import { supabase } from "../lib/supabase";
 export default function Layout() {
   const router = useRouter();
 
@@ -12,7 +12,7 @@ export default function Layout() {
     OTPWidget.initializeWidget('3667446a4f79373732303939', '555661TBCi9YjCmrdy6a6b2bb4P1');
 
     const routeAfterLogin = async () => {
-      import { setCurrentProfile } from "../lib/currentProfile";
+     
       const { data: sessionData } = await supabase.auth.getSession();
       const session = sessionData?.session;
       if (!session?.user) return;

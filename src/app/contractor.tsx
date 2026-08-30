@@ -1,21 +1,22 @@
-import { supabase } from '../lib/supabase';
-import { getCurrentProfileId, setCurrentProfile } from '../lib/currentProfile';
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from 'react';
 import {
-    View,
-    Text,
-    ScrollView,
-    Pressable,
-    StyleSheet,
-    StatusBar,
-    Alert,
-    TextInput,
-    ActivityIndicator,
-  } from "react-native";
-  import { SafeAreaView } from "react-native-safe-area-context";
-  import { LinearGradient } from "expo-linear-gradient";
-  import { useRouter } from "expo-router";
-  import { Ionicons } from "@expo/vector-icons";
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { getCurrentProfileId, setCurrentProfile } from '../lib/currentProfile';
+import { supabase } from '../lib/supabase';
 
   const TABS = [
     { key: "home", label: "Home", icon: "home" as const, route: "/contractor" },
@@ -30,9 +31,13 @@ import {
     const [resolvingId, setResolvingId] = useState(true);
 
     const [profile, setProfile] = useState<any>(null);
+    const [avgRating, setAvgRating] = useState(0);
+const [reviewCount, setReviewCount] = useState(0);
     const [leads, setLeads] = useState<any[]>([]);
     const [activeJobs, setActiveJobs] = useState<any[]>([]);
     const [bidStatuses, setBidStatuses] = useState<Record<number, string>>({});
+    const [portfolio, setPortfolio] = useState<any[]>([]);
+const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
     // Resolve who's logged in — memory first, otherwise fall back to the Supabase session
     const resolveContractorId = async (): Promise<number | null> => {
@@ -65,6 +70,72 @@ import {
         .single();
       console.log('PROFILE:', data, 'ERROR:', error);
       if (data) setProfile(data);
+    };
+    const getPortfolio = async (id: number) => {
+      const { data } = await supabase
+        .from('portfolio_photos')
+        .select('*')
+        .eq('contractor_id', id)
+        .order('created_at', { ascending: false });
+      if (data) setPortfolio(data);
+    };
+    
+    const handleAddPortfolioPhoto = async () => {
+      if (!contractorId) return;
+    
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permission needed", "Please allow photo access to upload portfolio photos.");
+        return;
+      }
+    
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+      });
+      if (result.canceled || !result.assets[0]) return;
+    
+      setUploadingPhoto(true);
+    
+      try {
+        const uri = result.assets[0].uri;
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const arrayBuffer = await new Response(blob).arrayBuffer();
+        const fileExt = uri.split('.').pop() || 'jpg';
+        const fileName = `portfolio/${contractorId}_${Date.now()}.${fileExt}`;
+    
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(fileName, arrayBuffer, { contentType: blob.type || 'image/jpeg' });
+    
+        if (uploadError) {
+          Alert.alert("Upload Error", uploadError.message);
+          setUploadingPhoto(false);
+          return;
+        }
+    
+        const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
+    
+        await supabase.from('portfolio_photos').insert({
+          contractor_id: contractorId,
+          photo_url: urlData.publicUrl,
+        });
+    
+        await getPortfolio(contractorId);
+      } catch (err) {
+        Alert.alert("Error", "Could not upload photo.");
+      } finally {
+        setUploadingPhoto(false);
+      }
+    };
+    const getReviews = async (id: number) => {
+      const { data } = await supabase.from('reviews').select('rating').eq('contractor_id', id);
+      if (data && data.length > 0) {
+        const avg = data.reduce((sum, r) => sum + r.rating, 0) / data.length;
+        setAvgRating(avg);
+        setReviewCount(data.length);
+      }
     };
 
     const getLeads = async () => {
@@ -139,6 +210,8 @@ import {
 
         if (id) {
           await getProfile(id);
+          await getPortfolio(id);
+          await getReviews(id);
           await refreshAll(id);
         }
       };
@@ -384,13 +457,34 @@ import {
                   <Text style={styles.profileName}>{profile?.name || 'Loading...'}</Text>
                   <Text style={styles.profileSkill}>{profile?.skill || ''}</Text>
                   <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={16} color="#fbbf24" />
-                    <Text style={styles.ratingText}>4.8</Text>
-                    <Text style={styles.ratingCount}>(127 reviews)</Text>
-                  </View>
+  <Ionicons name="star" size={16} color="#fbbf24" />
+  <Text style={styles.ratingText}>{avgRating > 0 ? avgRating.toFixed(1) : 'New'}</Text>
+  <Text style={styles.ratingCount}>({reviewCount} reviews)</Text>
+</View>
                 </View>
               </LinearGradient>
             </View>
+
+            {/* Portfolio */}
+<SectionHeader title="Portfolio" action="" />
+<ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
+  <Pressable style={styles.addPhotoBtn} onPress={handleAddPortfolioPhoto} disabled={uploadingPhoto}>
+    {uploadingPhoto ? (
+      <ActivityIndicator color="#22c55e" />
+    ) : (
+      <>
+        <Ionicons name="camera-outline" size={24} color="#64748b" />
+        <Text style={styles.addPhotoText}>Add Photo</Text>
+      </>
+    )}
+  </Pressable>
+  {portfolio.map((item: any) => (
+    <Image key={item.id} source={{ uri: item.photo_url }} style={styles.portfolioThumb} />
+  ))}
+</ScrollView>
+
+{/* Active Jobs */}
+<SectionHeader title="Active Jobs" action="See all" />
 
             {/* Active Jobs */}
             <SectionHeader title="Active Jobs" action="See all" />
@@ -408,6 +502,7 @@ import {
             {leads
               .filter((lead) => !activeJobs.some((job) => job.id === lead.id))
               .filter((lead) => bidStatuses[lead.id] !== 'blocked')
+              .filter((lead) => !lead.target_contractor_id || lead.target_contractor_id === contractorId)
               .map((lead) => (
                 <LeadCard
                   key={lead.id}
@@ -766,6 +861,31 @@ import {
       fontSize: 14,
       fontWeight: "600",
       color: "#22c55e",
+    },
+    addPhotoBtn: {
+      width: 90,
+      height: 90,
+      borderRadius: 14,
+      backgroundColor: "rgba(30, 41, 59, 0.5)",
+      borderWidth: 1,
+      borderColor: "#1e293b",
+      borderStyle: "dashed",
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 10,
+    },
+    addPhotoText: {
+      fontSize: 11,
+      color: "#64748b",
+      marginTop: 4,
+      fontWeight: "500",
+    },
+    portfolioThumb: {
+      width: 90,
+      height: 90,
+      borderRadius: 14,
+      marginRight: 10,
+      backgroundColor: "#1e293b",
     },
     card: {
       backgroundColor: "rgba(30, 41, 59, 0.6)",

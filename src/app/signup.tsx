@@ -1,25 +1,26 @@
+import { Ionicons } from "@expo/vector-icons";
+import { OTPWidget } from "@msg91comm/sendotp-react-native";
+import * as ImagePicker from "expo-image-picker";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  StatusBar,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
+  ActivityIndicator,
   Alert,
   Image,
-  ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
-import { OTPWidget } from "@msg91comm/sendotp-react-native";
+import { setCurrentProfile } from "../lib/currentProfile";
 import { supabase } from "../lib/supabase";
 
 const SKILLS = ["Interior", "Civil", "Electrical", "Plumbing", "Carpentry", "Modular Furniture"] as const;
@@ -237,7 +238,7 @@ export default function SignupScreen() {
   };
 
   const handleSubmit = async () => {
-    import { setCurrentProfile } from "../lib/currentProfile";
+    
     if (submitting) return;
     setSubmitting(true);
 

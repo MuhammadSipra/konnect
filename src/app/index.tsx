@@ -1,18 +1,45 @@
-import { useEffect } from "react";
-import { View, Text, StyleSheet, StatusBar } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useEffect } from "react";
+import { StatusBar, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { supabase } from "../lib/supabase";
 
 export default function SplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      router.replace("/welcome");
-    }, 5000);
+    const checkLoginAndNavigate = async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
 
-    return () => clearTimeout(timer);
+      const minDelay = new Promise((resolve) => setTimeout(resolve, 2000));
+      await minDelay;
+
+      if (!session?.user) {
+        router.replace("/welcome");
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
+
+      if (!profile) {
+        router.replace("/welcome");
+        return;
+      }
+
+      if (profile.user_type === 'contractor' && profile.verification_status !== 'approved') {
+        router.replace("/verification-pending");
+      } else {
+        router.replace(profile.user_type === 'contractor' ? "/contractor" : "/customer");
+      }
+    };
+
+    checkLoginAndNavigate();
   }, []);
 
   return (
@@ -28,7 +55,6 @@ export default function SplashScreen() {
 
       <SafeAreaView style={styles.safe}>
         <View style={styles.content}>
-          {/* Logo placeholder — swap for an <Image> later without touching layout */}
           <View style={styles.logoCircle}>
             <Text style={styles.logoLetter}>K</Text>
           </View>

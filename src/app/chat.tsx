@@ -1,19 +1,19 @@
-import { useState, useRef, useEffect } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  StatusBar,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 
 export default function ChatScreen() {
@@ -57,6 +57,16 @@ export default function ChatScreen() {
         .single();
       if (otherProfile) setOtherName(otherProfile.name);
 
+      const markAsRead = async () => {
+        await supabase
+          .from('messages')
+          .update({ is_read: true })
+          .eq('project_id', projectId)
+          .eq('sender_id', otherId)
+          .eq('receiver_id', myId)
+          .eq('is_read', false);
+      };
+
       const { data: project } = await supabase
         .from('projects')
         .select('title')
@@ -66,6 +76,7 @@ export default function ChatScreen() {
     };
 
     if (otherId && projectId) {
+      markAsRead();
       loadHeaderInfo();
       loadMessages();
     }

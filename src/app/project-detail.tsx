@@ -1,12 +1,19 @@
-import { supabase } from '../lib/supabase';
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, StatusBar, ActivityIndicator,Alert,
+  ActivityIndicator, Alert, Modal,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { supabase } from '../lib/supabase';
 
 export default function ProjectDetailScreen() {
   const router = useRouter();
@@ -15,6 +22,10 @@ export default function ProjectDetailScreen() {
   const [project, setProject] = useState<any>(null);
   const [bids, setBids] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [ratingModalBid, setRatingModalBid] = useState<any>(null);
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [comment, setComment] = useState("");
 
   const loadData = async () => {
     setLoading(true);
@@ -71,6 +82,7 @@ export default function ProjectDetailScreen() {
     console.log('Bid locked!');
     loadData();
   };
+
   const handleCancelConfirmed = async (bidId: string) => {
     Alert.alert(
       "Cancel Confirmed Contractor",
@@ -113,7 +125,7 @@ export default function ProjectDetailScreen() {
               })
               .eq('id', clientId);
 
-              await supabase
+            await supabase
               .from('bids')
               .update({ status: 'pending', not_selected_at: null })
               .eq('project_id', id)
@@ -140,6 +152,32 @@ export default function ProjectDetailScreen() {
         },
       ]
     );
+  };
+
+  const handleMarkComplete = (bid: any) => {
+    setRatingModalBid(bid);
+    setSelectedRating(0);
+    setComment("");
+  };
+
+  const submitReview = async () => {
+    if (!ratingModalBid || selectedRating === 0) {
+      Alert.alert("Select a rating", "Please tap a star rating before submitting.");
+      return;
+    }
+
+    await supabase.from('bids').update({ status: 'completed' }).eq('id', ratingModalBid.id);
+
+    await supabase.from('reviews').insert({
+      project_id: project.id,
+      contractor_id: ratingModalBid.contractor_id,
+      client_id: project.client_id,
+      rating: selectedRating,
+      comment: comment.trim(),
+    });
+
+    setRatingModalBid(null);
+    loadData();
   };
 
   if (loading) {
@@ -237,6 +275,7 @@ export default function ProjectDetailScreen() {
               const initials = name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
               const isLocked = bid.status === 'locked';
               const isConfirmed = bid.status === 'confirmed';
+              const isCompleted = bid.status === 'completed';
 
               return (
                 <View key={bid.id} style={styles.bidCard}>
@@ -252,24 +291,31 @@ export default function ProjectDetailScreen() {
                     <Text style={styles.bidAmount}>
                       {bid.amount ? `₹${bid.amount}` : 'No quote'}
                     </Text>
-                    {isConfirmed ? (
-  <View style={{ alignItems: "flex-end", gap: 6 }}>
-    <View style={styles.acceptedBadge}>
-      <Text style={styles.acceptedBadgeText}>Confirmed</Text>
-    </View>
-    <Pressable
-      style={styles.messageBtn}
-      onPress={() => router.push(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=client` as never)}
-    >
-      <Ionicons name="chatbubble-outline" size={13} color="#3b82f6" />
-      <Text style={styles.messageBtnText}>Message</Text>
-    </Pressable>
-    <Pressable onPress={() => handleCancelConfirmed(bid.id)}>
-      <Text style={styles.cancelLink}>Cancel</Text>
-    </Pressable>
-  </View>
-) : isLocked ? (  
-                           <View style={{ alignItems: "flex-end", gap: 6 }}>
+                    {isCompleted ? (
+                      <View style={styles.acceptedBadge}>
+                        <Text style={styles.acceptedBadgeText}>Completed</Text>
+                      </View>
+                    ) : isConfirmed ? (
+                      <View style={{ alignItems: "flex-end", gap: 6 }}>
+                        <View style={styles.acceptedBadge}>
+                          <Text style={styles.acceptedBadgeText}>Confirmed</Text>
+                        </View>
+                        <Pressable
+                          style={styles.messageBtn}
+                          onPress={() => router.push(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=client` as never)}
+                        >
+                          <Ionicons name="chatbubble-outline" size={13} color="#3b82f6" />
+                          <Text style={styles.messageBtnText}>Message</Text>
+                        </Pressable>
+                        <Pressable onPress={() => handleMarkComplete(bid)}>
+                          <Text style={styles.completeLink}>Mark Complete</Text>
+                        </Pressable>
+                        <Pressable onPress={() => handleCancelConfirmed(bid.id)}>
+                          <Text style={styles.cancelLink}>Cancel</Text>
+                        </Pressable>
+                      </View>
+                    ) : isLocked ? (
+                      <View style={{ alignItems: "flex-end", gap: 6 }}>
                         <View style={styles.acceptedBadge}>
                           <Text style={styles.acceptedBadgeText}>Locked</Text>
                         </View>
@@ -297,6 +343,40 @@ export default function ProjectDetailScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
       </SafeAreaView>
+
+      <Modal visible={ratingModalBid !== null} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Rate this Contractor</Text>
+            <View style={{ flexDirection: "row", justifyContent: "center", gap: 8, marginVertical: 16 }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Pressable key={star} onPress={() => setSelectedRating(star)}>
+                  <Ionicons
+                    name={star <= selectedRating ? "star" : "star-outline"}
+                    size={32}
+                    color="#fbbf24"
+                  />
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              style={styles.modalOtpInput}
+              placeholder="Optional comment"
+              placeholderTextColor="#64748b"
+              value={comment}
+              onChangeText={setComment}
+            />
+            <View style={styles.modalBtnRow}>
+              <Pressable style={styles.modalCancelBtn} onPress={() => setRatingModalBid(null)}>
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.modalConfirmBtn} onPress={submitReview}>
+                <Text style={styles.modalConfirmBtnText}>Submit</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -359,6 +439,11 @@ const styles = StyleSheet.create({
     color: "#ef4444",
     fontWeight: "600",
   },
+  completeLink: {
+    fontSize: 11,
+    color: "#22c55e",
+    fontWeight: "600",
+  },
   messageBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -372,4 +457,13 @@ const styles = StyleSheet.create({
     color: "#3b82f6",
   },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
+  modalCard: { width: "100%", backgroundColor: "#0f172a", borderRadius: 20, padding: 24, borderWidth: 1, borderColor: "#1e293b" },
+  modalTitle: { fontSize: 18, fontWeight: "700", color: "#f8fafc", textAlign: "center" },
+  modalOtpInput: { backgroundColor: "rgba(30,41,59,0.7)", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: "#f8fafc", borderWidth: 1, borderColor: "#1e293b", marginBottom: 16 },
+  modalBtnRow: { flexDirection: "row", gap: 12 },
+  modalCancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "rgba(30,41,59,0.7)", borderWidth: 1, borderColor: "#1e293b" },
+  modalCancelBtnText: { fontSize: 14, fontWeight: "600", color: "#94a3b8" },
+  modalConfirmBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#22c55e" },
+  modalConfirmBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
 });

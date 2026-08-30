@@ -1,12 +1,18 @@
-import { supabase } from '../lib/supabase';
-import { useEffect, useState } from 'react';
-import {
-  View, Text, ScrollView, Pressable, StyleSheet, StatusBar, TextInput,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useState } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { supabase } from '../lib/supabase';
 
 const CATEGORIES = [
   "Full Project", "Interior", "Civil", "Electrical", "Plumbing", "Carpentry",
@@ -122,7 +128,7 @@ function ContractorCard({ contractor }: { contractor: any }) {
   const router = useRouter();
   const initials = contractor.name?.split(" ").map((n: string) => n[0]).join("").slice(0, 2) || "?";
   return (
-    <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]} onPress={() => router.push("/contractor-detail")}>
+    <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]} onPress={() => router.push(`/contractor-detail?id=${contractor.id}` as never)}>
       <LinearGradient colors={["#3b82f6", "#2563eb"]} style={styles.avatar}>
         <Text style={styles.avatarText}>{initials}</Text>
       </LinearGradient>

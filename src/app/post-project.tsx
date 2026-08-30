@@ -1,23 +1,22 @@
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  StatusBar,
-  TextInput,
+  Alert,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { supabase } from '../lib/supabase';
 import { getCurrentProfileId, setCurrentProfile } from '../lib/currentProfile';
-
+import { supabase } from '../lib/supabase';
 const CATEGORIES = [
   "Full Project",
   "Interior",
@@ -112,6 +111,7 @@ async function resolveClientId(): Promise<number | null> {
 
 export default function PostProjectScreen() {
   const router = useRouter();
+  const { targetContractorId } = useLocalSearchParams<{ targetContractorId?: string }>();
 
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<Category>("Full Project");
@@ -150,6 +150,7 @@ export default function PostProjectScreen() {
         timeline,
         client_id: clientId,
         confirmation_code: confirmationCode,
+        contractor_id: targetContractorId ? parseInt(targetContractorId) : null,
       });
 
     setPosting(false);

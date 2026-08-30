@@ -1,22 +1,21 @@
+import { Ionicons } from "@expo/vector-icons";
 import { OTPWidget } from '@msg91comm/sendotp-react-native';
-import { useState, useRef, useEffect } from "react";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  StatusBar,
-  TextInput,
+  Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
-import { Alert } from "react-native";
-
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
 
@@ -81,7 +80,7 @@ const [verifying, setVerifying] = useState(false);
   };
 
   const handleVerify = async () => {
-    import { setCurrentProfile } from "../lib/currentProfile";
+  
     if (!isComplete || verifying) return;
     setVerifying(true);
   

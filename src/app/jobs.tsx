@@ -1,16 +1,19 @@
-import { useState } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  StatusBar,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { getCurrentProfileId } from '../lib/currentProfile';
+import { supabase } from '../lib/supabase';
 
 type TabKey = "active" | "completed" | "pending";
 
@@ -20,79 +23,87 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "pending", label: "Pending" },
 ];
 
-const ACTIVE_JOBS = [
-  {
-    id: "1",
-    title: "Kitchen Renovation",
-    client: "Priya Sharma",
-    location: "Andheri West, Mumbai",
-    budget: "₹85,000",
-    progress: 65,
-  },
-  {
-    id: "2",
-    title: "Bathroom Tiling",
-    client: "Rahul Mehta",
-    location: "Bandra East, Mumbai",
-    budget: "₹32,000",
-    progress: 30,
-  },
-];
-
-const COMPLETED_JOBS = [
-  {
-    id: "1",
-    title: "Living Room Painting",
-    client: "Anita Desai",
-    location: "Powai, Mumbai",
-    budget: "₹28,000",
-    completedOn: "Feb 12, 2026",
-    rating: 5,
-  },
-  {
-    id: "2",
-    title: "Office Partition Work",
-    client: "TechStart Pvt Ltd",
-    location: "Lower Parel, Mumbai",
-    budget: "₹45,000",
-    completedOn: "Jan 28, 2026",
-    rating: 4.5,
-  },
-];
-
-const PENDING_JOBS = [
-  {
-    id: "1",
-    title: "Full Home Painting",
-    client: "Vikram Singh",
-    location: "Malad West, Mumbai",
-    budget: "₹1,20,000",
-    requestedOn: "2 hours ago",
-  },
-  {
-    id: "2",
-    title: "Modular Kitchen Setup",
-    client: "Neha Kapoor",
-    location: "Goregaon East, Mumbai",
-    budget: "₹95,000",
-    requestedOn: "Yesterday",
-  },
-];
-
 const BOTTOM_TABS = [
   { key: "home", label: "Home", icon: "home" as const, route: "/contractor" },
   { key: "jobs", label: "Jobs", icon: "briefcase" as const, route: "/jobs" },
   { key: "messages", label: "Messages", icon: "chatbubbles" as const, route: "/messages" },
-  { key: "profile", label: "Profile", icon: "person" as const, route: "/contractor" },
+  { key: "profile", label: "Profile", icon: "person" as const, route: "/profile" },
 ];
+
+async function resolveContractorId(): Promise<number | null> {
+  const cached = getCurrentProfileId();
+  if (cached) return cached;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const authUserId = sessionData?.session?.user?.id;
+  if (!authUserId) return null;
+
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('auth_user_id', authUserId)
+    .eq('user_type', 'contractor')
+    .maybeSingle();
+
+  return profileRow?.id ?? null;
+}
 
 export default function JobsScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabKey>("active");
+  const [loading, setLoading] = useState(true);
+
+  const [activeJobs, setActiveJobs] = useState<any[]>([]);
+  const [completedJobs, setCompletedJobs] = useState<any[]>([]);
+  const [pendingJobs, setPendingJobs] = useState<any[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      const contractorId = await resolveContractorId();
+      if (!contractorId) {
+        setLoading(false);
+        return;
+      }
+
+      const { data: bids } = await supabase
+        .from('bids')
+        .select('*')
+        .eq('contractor_id', contractorId);
+
+      if (!bids || bids.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      const projectIds = bids.map((b) => b.project_id);
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('*')
+        .in('id', projectIds);
+
+      const { data: reviews } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('contractor_id', contractorId);
+
+      const merged = bids.map((bid) => ({
+        ...bid,
+        project: projects?.find((p) => p.id === bid.project_id),
+        review: reviews?.find((r) => r.project_id === bid.project_id),
+      })).filter((b) => b.project);
+
+      setActiveJobs(merged.filter((b) => b.status === 'accepted' || b.status === 'confirmed'));
+      setCompletedJobs(merged.filter((b) => b.status === 'completed'));
+      setPendingJobs(merged.filter((b) => b.status === 'pending' || b.status === 'locked'));
+
+      setLoading(false);
+    };
+    load();
+  }, []);
 
   const handleBottomTabPress = (tab: (typeof BOTTOM_TABS)[number]) => {
     if (tab.key === "jobs") return;
-    router.push(tab.route as "/contractor" | "/jobs" | "/messages");
+    router.push(tab.route as never);
   };
 
   return (
@@ -130,98 +141,126 @@ export default function JobsScreen() {
           })}
         </View>
 
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {activeTab === "active" &&
-            ACTIVE_JOBS.map((job) => (
-              <Pressable
-                key={job.id}
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-              >
-                <Text style={styles.cardTitle}>{job.title}</Text>
-                <Text style={styles.cardMeta}>{job.client}</Text>
-                <View style={styles.cardRow}>
-                  <Ionicons name="location-outline" size={14} color="#64748b" />
-                  <Text style={styles.cardDetail}>{job.location}</Text>
-                </View>
-                <Text style={styles.cardBudget}>{job.budget}</Text>
-
-                <View style={styles.progressHeader}>
-                  <Text style={styles.progressLabel}>Progress</Text>
-                  <Text style={styles.progressPercent}>{job.progress}%</Text>
-                </View>
-                <View style={styles.progressTrack}>
-                  <View style={[styles.progressFill, { width: `${job.progress}%` }]} />
-                </View>
-              </Pressable>
-            ))}
-
-          {activeTab === "completed" &&
-            COMPLETED_JOBS.map((job) => (
-              <Pressable
-                key={job.id}
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-              >
-                <View style={styles.cardTop}>
-                  <Text style={styles.cardTitle}>{job.title}</Text>
-                  <View style={styles.completedBadge}>
-                    <Text style={styles.completedBadgeText}>Completed</Text>
-                  </View>
-                </View>
-                <Text style={styles.cardMeta}>{job.client}</Text>
-                <View style={styles.cardRow}>
-                  <Ionicons name="location-outline" size={14} color="#64748b" />
-                  <Text style={styles.cardDetail}>{job.location}</Text>
-                </View>
-                <Text style={styles.cardBudget}>{job.budget}</Text>
-                <Text style={styles.completedDate}>Finished on {job.completedOn}</Text>
-
-                <View style={styles.ratingRow}>
-                  <Ionicons name="star" size={16} color="#fbbf24" />
-                  <Text style={styles.ratingText}>
-                    {job.rating} rating received
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-
-          {activeTab === "pending" &&
-            PENDING_JOBS.map((job) => (
-              <Pressable
-                key={job.id}
-                style={({ pressed }) => [styles.card, styles.pendingCard, pressed && styles.pressed]}
-              >
-                <View style={styles.pendingAccent} />
-                <View style={styles.pendingContent}>
-                  <View style={styles.cardTop}>
-                    <Text style={styles.cardTitle}>{job.title}</Text>
-                    <Text style={styles.pendingTime}>{job.requestedOn}</Text>
-                  </View>
-                  <Text style={styles.cardMeta}>{job.client}</Text>
-                  <View style={styles.cardRow}>
-                    <Ionicons name="location-outline" size={14} color="#64748b" />
-                    <Text style={styles.cardDetail}>{job.location}</Text>
-                  </View>
-                  <Text style={styles.cardBudget}>{job.budget}</Text>
-
-                  <View style={styles.pendingFooter}>
-                    <View style={styles.waitingBadge}>
-                      <Ionicons name="time-outline" size={14} color="#fbbf24" />
-                      <Text style={styles.waitingText}>Waiting for your response</Text>
+        {loading ? (
+          <View style={styles.centerWrap}>
+            <ActivityIndicator size="large" color="#22c55e" />
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {activeTab === "active" && (
+              activeJobs.length === 0 ? (
+                <EmptyState text="No active jobs right now." />
+              ) : (
+                activeJobs.map((job) => (
+                  <Pressable
+                    key={job.id}
+                    style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                    onPress={() => router.push(`/project-detail?id=${job.project.id}` as never)}
+                  >
+                    <Text style={styles.cardTitle}>{job.project.title}</Text>
+                    <View style={styles.cardRow}>
+                      <Ionicons name="location-outline" size={14} color="#64748b" />
+                      <Text style={styles.cardDetail}>{job.project.location}</Text>
                     </View>
-                    <Pressable style={styles.respondBtn}>
-                      <Text style={styles.respondBtnText}>Respond</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              </Pressable>
-            ))}
+                    <Text style={styles.cardBudget}>{job.project.budget}</Text>
+                    <View style={styles.statusRow}>
+                      <View style={styles.statusBadge}>
+                        <Text style={styles.statusBadgeText}>
+                          {job.status === 'confirmed' ? 'In Progress' : 'Confirmed'}
+                        </Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                ))
+              )
+            )}
 
-          <View style={{ height: 100 }} />
-        </ScrollView>
+            {activeTab === "completed" && (
+              completedJobs.length === 0 ? (
+                <EmptyState text="No completed jobs yet." />
+              ) : (
+                completedJobs.map((job) => (
+                  <Pressable
+                    key={job.id}
+                    style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                    onPress={() => router.push(`/project-detail?id=${job.project.id}` as never)}
+                  >
+                    <View style={styles.cardTop}>
+                      <Text style={styles.cardTitle}>{job.project.title}</Text>
+                      <View style={styles.completedBadge}>
+                        <Text style={styles.completedBadgeText}>Completed</Text>
+                      </View>
+                    </View>
+                    <View style={styles.cardRow}>
+                      <Ionicons name="location-outline" size={14} color="#64748b" />
+                      <Text style={styles.cardDetail}>{job.project.location}</Text>
+                    </View>
+                    <Text style={styles.cardBudget}>{job.project.budget}</Text>
+                    <Text style={styles.completedDate}>
+                      Finished on {new Date(job.created_at).toLocaleDateString()}
+                    </Text>
+                    {job.review ? (
+                      <View style={styles.ratingRow}>
+                        <Ionicons name="star" size={16} color="#fbbf24" />
+                        <Text style={styles.ratingText}>{job.review.rating} rating received</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.ratingRow}>
+                        <Text style={styles.noRatingText}>No rating yet</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                ))
+              )
+            )}
+
+            {activeTab === "pending" && (
+              pendingJobs.length === 0 ? (
+                <EmptyState text="No pending jobs right now." />
+              ) : (
+                pendingJobs.map((job) => (
+                  <Pressable
+                    key={job.id}
+                    style={({ pressed }) => [styles.card, styles.pendingCard, pressed && styles.pressed]}
+                    onPress={() => router.push('/contractor' as never)}
+                  >
+                    <View style={styles.pendingAccent} />
+                    <View style={styles.pendingContent}>
+                      <View style={styles.cardTop}>
+                        <Text style={styles.cardTitle}>{job.project.title}</Text>
+                        <Text style={styles.pendingTime}>
+                          {new Date(job.created_at).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <View style={styles.cardRow}>
+                        <Ionicons name="location-outline" size={14} color="#64748b" />
+                        <Text style={styles.cardDetail}>{job.project.location}</Text>
+                      </View>
+                      <Text style={styles.cardBudget}>{job.project.budget}</Text>
+
+                      <View style={styles.pendingFooter}>
+                        <View style={styles.waitingBadge}>
+                          <Ionicons name="time-outline" size={14} color="#fbbf24" />
+                          <Text style={styles.waitingText}>
+                            {job.status === 'locked'
+                              ? 'Client shortlisted you — enter code on Home'
+                              : 'Waiting for client response'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </Pressable>
+                ))
+              )
+            )}
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+        )}
 
         {/* Bottom Tab Bar */}
         <View style={styles.tabBarWrap}>
@@ -258,6 +297,15 @@ export default function JobsScreen() {
   );
 }
 
+function EmptyState({ text }: { text: string }) {
+  return (
+    <View style={styles.emptyWrap}>
+      <Ionicons name="briefcase-outline" size={40} color="#334155" />
+      <Text style={styles.emptyText}>{text}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -283,6 +331,11 @@ const styles = StyleSheet.create({
   },
   safe: {
     flex: 1,
+  },
+  centerWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   header: {
     paddingHorizontal: 20,
@@ -327,6 +380,17 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
   },
+  emptyWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    gap: 10,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#64748b",
+    fontWeight: "500",
+  },
   card: {
     backgroundColor: "rgba(30, 41, 59, 0.6)",
     borderRadius: 16,
@@ -360,11 +424,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#f8fafc",
   },
-  cardMeta: {
-    marginTop: 6,
-    fontSize: 14,
-    color: "#94a3b8",
-  },
   cardRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -381,33 +440,23 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#22c55e",
   },
-  progressHeader: {
+  statusRow: {
+    marginTop: 12,
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 16,
-    marginBottom: 8,
   },
-  progressLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#94a3b8",
+  statusBadge: {
+    backgroundColor: "rgba(34, 197, 94, 0.15)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.35)",
   },
-  progressPercent: {
-    fontSize: 13,
+  statusBadgeText: {
+    fontSize: 11,
     fontWeight: "700",
     color: "#22c55e",
-  },
-  progressTrack: {
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: "#1e293b",
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 999,
-    backgroundColor: "#22c55e",
+    textTransform: "uppercase",
   },
   completedBadge: {
     backgroundColor: "rgba(59, 130, 246, 0.15)",
@@ -443,6 +492,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#fbbf24",
   },
+  noRatingText: {
+    fontSize: 13,
+    color: "#64748b",
+    fontWeight: "500",
+  },
   pendingTime: {
     fontSize: 12,
     color: "#64748b",
@@ -466,17 +520,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: "#fbbf24",
-  },
-  respondBtn: {
-    backgroundColor: "#2563eb",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  respondBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#ffffff",
   },
   pressed: {
     opacity: 0.85,
