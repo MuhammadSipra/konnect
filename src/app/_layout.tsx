@@ -2,42 +2,67 @@ import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import * as Linking from "expo-linking";
 import { Stack, useRouter } from "expo-router";
 import { useEffect } from "react";
-import { setCurrentProfile } from "../lib/currentProfile";
+import { hydrateCurrentProfile, setCurrentProfile } from "../lib/currentProfile";
 import { getPendingRole } from "../lib/pendingRole";
 import { supabase } from "../lib/supabase";
+
 export default function Layout() {
   const router = useRouter();
 
   useEffect(() => {
     OTPWidget.initializeWidget('3667446a4f79373732303939', '555661TBCi9YjCmrdy6a6b2bb4P1');
 
-    const routeAfterLogin = async () => {
-     
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      if (!session?.user) return;
+    let hasRouted = false;
+    let googleUrlProcessed = false;
 
-      const authUserId = session.user.id;
-      const role = getPendingRole();
-
-      const { data: existingProfile } = await supabase
+    const linkOrFindProfile = async (authUserId: string, role: string, email: string | null) => {
+      const { data: byAuthId } = await supabase
         .from('profiles')
         .select('*')
         .eq('auth_user_id', authUserId)
         .maybeSingle();
 
-        if (existingProfile) {
-          setCurrentProfile(existingProfile.id, existingProfile.user_type);
-          if (
-            existingProfile.user_type === 'contractor' &&
-            existingProfile.verification_status !== 'approved'
-          ) {
-            router.replace('/verification-pending');
-          } else {
-            router.replace(existingProfile.user_type === 'contractor' ? '/contractor' : '/customer');
-          }
+      if (byAuthId) return byAuthId;
+
+      if (email) {
+        const { data: byEmail } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('email', email)
+          .eq('user_type', role)
+          .is('auth_user_id', null)
+          .maybeSingle();
+
+        if (byEmail) {
+          await supabase.from('profiles').update({ auth_user_id: authUserId }).eq('id', byEmail.id);
+          return { ...byEmail, auth_user_id: authUserId };
         }
-        else {
+      }
+
+      return null;
+    };
+
+    const routeForSession = async (session: any) => {
+      if (!session?.user) return;
+
+      const authUserId = session.user.id;
+      const role = getPendingRole();
+
+      const existingProfile = await linkOrFindProfile(authUserId, role, session.user.email || null);
+
+      if (existingProfile) {
+        setCurrentProfile(existingProfile.id, existingProfile.user_type);
+        router.dismissAll();
+        if (
+          existingProfile.user_type === 'contractor' &&
+          existingProfile.verification_status !== 'approved'
+        ) {
+          router.replace('/verification-pending');
+        } else {
+          router.replace(existingProfile.user_type === 'contractor' ? '/contractor' : '/customer');
+        }
+      } else {
+        router.dismissAll();
         router.replace({
           pathname: '/signup',
           params: {
@@ -49,37 +74,111 @@ export default function Layout() {
       }
     };
 
-    const handleUrl = async (url: string | null) => {
-      if (!url) return;
-      console.log('INCOMING URL:', url);
+    const startGoogleOtpVerification = async (session: any) => {
+      if (!session?.user) return;
 
-      if (url.includes('access_token')) {
-        const hashPart = url.split('#')[1] || url.split('?')[1];
-        if (!hashPart) return;
+      const email = session.user.email;
+      if (!email) {
+        await routeForSession(session);
+        return;
+      }
 
-        const params = new URLSearchParams(hashPart);
-        const access_token = params.get('access_token');
-        const refresh_token = params.get('refresh_token');
-
-        if (access_token && refresh_token) {
-          const { error } = await supabase.auth.setSession({
-            access_token,
-            refresh_token,
+      try {
+        const response = await OTPWidget.sendOTP({ identifier: email });
+        if (response.type === 'success') {
+          hasRouted = true;
+          router.replace({
+            pathname: '/otp',
+            params: {
+              mode: 'google',
+              email,
+              role: getPendingRole(),
+              reqId: response.message,
+            },
           });
-          if (error) {
-            console.log('SET SESSION ERROR:', error.message);
-          } else {
-            console.log('Session set from deep link!');
-            await routeAfterLogin();
-          }
+        } else {
+          console.log('GOOGLE EMAIL OTP SEND FAILED:', JSON.stringify(response));
+          await routeForSession(session);
         }
+      } catch (err) {
+        console.log('GOOGLE EMAIL OTP ERROR:', err);
+        await routeForSession(session);
       }
     };
 
-    // Handle the case where the link opened/resumed the app from cold start
-    Linking.getInitialURL().then(handleUrl);
+    const handleUrl = async (url: string | null): Promise<boolean> => {
+      if (!url || !url.includes('access_token') || googleUrlProcessed) return false;
 
-    // Handle the case where the link arrives while the app is already running
+      const hashPart = url.split('#')[1] || url.split('?')[1];
+      if (!hashPart) return false;
+
+      const params = new URLSearchParams(hashPart);
+      const access_token = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+      if (!access_token || !refresh_token) return false;
+
+      googleUrlProcessed = true;
+
+      const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+      if (error) {
+        console.log('SET SESSION ERROR:', error.message);
+        return true;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      await startGoogleOtpVerification(sessionData?.session);
+      return true;
+    };
+
+    const runInitialCheck = async () => {
+      const minDelay = new Promise((resolve) => setTimeout(resolve, 2000));
+      const hydratedPromise = hydrateCurrentProfile();
+      const [, hydrated] = await Promise.all([minDelay, hydratedPromise]);
+
+      if (hasRouted) return;
+
+      if (hydrated) {
+        hasRouted = true;
+        router.dismissAll();
+        if (hydrated.role === 'contractor') {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('verification_status')
+            .eq('id', hydrated.id)
+            .maybeSingle();
+          if (profile && profile.verification_status !== 'approved') {
+            router.replace('/verification-pending');
+          } else {
+            router.replace('/contractor');
+          }
+        } else {
+          router.replace('/customer');
+        }
+        return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+
+      if (session?.user) {
+        hasRouted = true;
+        await routeForSession(session);
+      } else if (!hasRouted) {
+        hasRouted = true;
+        router.dismissAll();
+        router.replace('/welcome');
+      }
+    };
+
+    const init = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      const handled = await handleUrl(initialUrl);
+      if (!handled) {
+        await runInitialCheck();
+      }
+    };
+    init();
+
     const subscription = Linking.addEventListener('url', (event) => {
       handleUrl(event.url);
     });

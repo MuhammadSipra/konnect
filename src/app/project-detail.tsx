@@ -15,6 +15,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from '../lib/supabase';
 
+const CLIENT_CANCEL_REASONS = [
+  "Project no longer needed",
+  "Budget changed",
+  "Selected another contractor",
+  "Contractor unavailable",
+  "Other",
+];
+
 export default function ProjectDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
@@ -26,6 +34,8 @@ export default function ProjectDetailScreen() {
   const [ratingModalBid, setRatingModalBid] = useState<any>(null);
   const [selectedRating, setSelectedRating] = useState(0);
   const [comment, setComment] = useState("");
+
+  const [cancelReasonBidId, setCancelReasonBidId] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -83,75 +93,66 @@ export default function ProjectDetailScreen() {
     loadData();
   };
 
-  const handleCancelConfirmed = async (bidId: string) => {
-    Alert.alert(
-      "Cancel Confirmed Contractor",
-      "Are you sure? Since this contractor was confirmed, cancelling now may lead to a trust score and wallet penalty (unless this is your first cancellation this month).",
-      [
-        { text: "No", style: "cancel" },
-        {
-          text: "Yes, Cancel",
-          style: "destructive",
-          onPress: async () => {
-            const clientId = project.client_id;
+  // Client-initiated cancellation of a CONFIRMED bid opens the reason picker.
+  const handleCancelConfirmed = (bidId: string) => {
+    setCancelReasonBidId(bidId);
+  };
 
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('cancellations_this_month, last_cancel_month, trust_score, wallet_balance')
-              .eq('id', clientId)
-              .single();
+  // Client cancellations carry NO penalty on the contractor (no trust/wallet hit,
+  // and the per-project cancel_count that leads to "blocked" is untouched —
+  // that counter only moves when the CONTRACTOR is the one who cancels).
+  // The client themselves gets a soft trust hit only from their 2nd cancellation
+  // in a calendar month onward.
+  const submitClientCancellation = async (reason: string) => {
+    if (!cancelReasonBidId || !project) return;
+    const bidId = cancelReasonBidId;
+    setCancelReasonBidId(null);
 
-            const currentMonth = new Date().toISOString().slice(0, 7);
-            let newCount = 1;
-            let newTrustScore = profileData?.trust_score ?? 100;
-            let newWallet = profileData?.wallet_balance ?? 0;
+    const clientId = project.client_id;
 
-            if (profileData?.last_cancel_month === currentMonth) {
-              newCount = (profileData?.cancellations_this_month || 0) + 1;
-            }
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('cancellations_this_month, last_cancel_month, trust_score')
+      .eq('id', clientId)
+      .single();
 
-            if (newCount > 1) {
-              newTrustScore = Math.max(0, newTrustScore - 10);
-              newWallet = Math.max(0, newWallet - 50);
-            }
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    let newCount = 1;
+    let newTrustScore = profileData?.trust_score ?? 100;
 
-            await supabase
-              .from('profiles')
-              .update({
-                cancellations_this_month: newCount,
-                last_cancel_month: currentMonth,
-                trust_score: newTrustScore,
-                wallet_balance: newWallet,
-              })
-              .eq('id', clientId);
+    if (profileData?.last_cancel_month === currentMonth) {
+      newCount = (profileData?.cancellations_this_month || 0) + 1;
+    }
 
-            await supabase
-              .from('bids')
-              .update({ status: 'pending', not_selected_at: null })
-              .eq('project_id', id)
-              .eq('status', 'not_selected');
+    if (newCount > 1) {
+      newTrustScore = Math.max(0, newTrustScore - 5);
+    }
 
-            const { data: thisBid } = await supabase
-              .from('bids')
-              .select('cancel_count')
-              .eq('id', bidId)
-              .single();
+    await supabase
+      .from('profiles')
+      .update({
+        cancellations_this_month: newCount,
+        last_cancel_month: currentMonth,
+        trust_score: newTrustScore,
+      })
+      .eq('id', clientId);
 
-            const newCancelCount = (thisBid?.cancel_count || 0) + 1;
+    await supabase
+      .from('bids')
+      .update({ status: 'pending', not_selected_at: null })
+      .eq('project_id', id)
+      .eq('status', 'not_selected');
 
-            await supabase
-              .from('bids')
-              .update({
-                status: newCancelCount >= 2 ? 'blocked' : 'pending',
-                cancel_count: newCancelCount,
-              })
-              .eq('id', bidId);
+    await supabase
+      .from('bids')
+      .update({
+        status: 'pending',
+        cancelled_by: 'client',
+        cancellation_reason: reason,
+      })
+      .eq('id', bidId);
 
-            loadData();
-          },
-        },
-      ]
-    );
+    loadData();
   };
 
   const handleMarkComplete = (bid: any) => {
@@ -166,7 +167,7 @@ export default function ProjectDetailScreen() {
       return;
     }
 
-    await supabase.from('bids').update({ status: 'completed' }).eq('id', ratingModalBid.id);
+    await supabase.from('bids').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', ratingModalBid.id);
 
     await supabase.from('reviews').insert({
       project_id: project.id,
@@ -302,7 +303,7 @@ export default function ProjectDetailScreen() {
                         </View>
                         <Pressable
                           style={styles.messageBtn}
-                          onPress={() => router.push(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=client` as never)}
+                          onPress={() => router.replace(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=client` as never)}
                         >
                           <Ionicons name="chatbubble-outline" size={13} color="#3b82f6" />
                           <Text style={styles.messageBtnText}>Message</Text>
@@ -321,7 +322,7 @@ export default function ProjectDetailScreen() {
                         </View>
                         <Pressable
                           style={styles.messageBtn}
-                          onPress={() => router.push(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=client` as never)}
+                          onPress={() => router.replace(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=client` as never)}
                         >
                           <Ionicons name="chatbubble-outline" size={13} color="#3b82f6" />
                           <Text style={styles.messageBtnText}>Message</Text>
@@ -374,6 +375,28 @@ export default function ProjectDetailScreen() {
                 <Text style={styles.modalConfirmBtnText}>Submit</Text>
               </Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={cancelReasonBidId !== null} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Why are you cancelling?</Text>
+            <View style={{ marginTop: 16, gap: 10 }}>
+              {CLIENT_CANCEL_REASONS.map((reason) => (
+                <Pressable
+                  key={reason}
+                  style={styles.reasonOption}
+                  onPress={() => submitClientCancellation(reason)}
+                >
+                  <Text style={styles.reasonOptionText}>{reason}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable style={styles.modalDismissBtn} onPress={() => setCancelReasonBidId(null)}>
+              <Text style={styles.modalDismissBtnText}>Never mind</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -466,4 +489,27 @@ const styles = StyleSheet.create({
   modalCancelBtnText: { fontSize: 14, fontWeight: "600", color: "#94a3b8" },
   modalConfirmBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#22c55e" },
   modalConfirmBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  reasonOption: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: "rgba(30,41,59,0.7)",
+    borderWidth: 1,
+    borderColor: "#1e293b",
+  },
+  reasonOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#f8fafc",
+  },
+  modalDismissBtn: {
+    marginTop: 16,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  modalDismissBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#64748b",
+  },
 });

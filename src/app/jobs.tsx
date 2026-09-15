@@ -103,7 +103,7 @@ export default function JobsScreen() {
 
   const handleBottomTabPress = (tab: (typeof BOTTOM_TABS)[number]) => {
     if (tab.key === "jobs") return;
-    router.push(tab.route as never);
+    router.replace(tab.route as never);
   };
 
   return (

@@ -1,15 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
+  BackHandler,
+  Image,
   Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from '../lib/supabase';
@@ -19,6 +23,13 @@ const CATEGORIES = [
 ] as const;
 
 type Category = (typeof CATEGORIES)[number];
+
+const TABS = [
+  { key: "home", label: "Home", icon: "home" as const, route: "/customer" },
+  { key: "projects", label: "My Projects", icon: "folder" as const, route: "/my-projects" },
+  { key: "messages", label: "Messages", icon: "chatbubbles" as const, route: "/messages" },
+  { key: "profile", label: "Profile", icon: "person" as const, route: "/profile" },
+];
 
 export default function CustomerDashboard() {
   const router = useRouter();
@@ -36,6 +47,27 @@ export default function CustomerDashboard() {
         if (data) setContractors(data);
       });
   }, []);
+  const handleExitApp = () => {
+    Alert.alert(
+      "Exit Konnect?",
+      "Are you sure you want to exit the app?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Exit", style: "destructive", onPress: () => BackHandler.exitApp() },
+      ]
+    );
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        handleExitApp();
+        return true;
+      };
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [])
+  );
 
   const displayList = contractors.filter((c) => {
     const q = search.trim().toLowerCase();
@@ -53,18 +85,19 @@ export default function CustomerDashboard() {
       <View style={styles.glowGreen} />
       <View style={styles.glowBlue} />
       <SafeAreaView style={styles.safe} edges={["top"]}>
-      <View style={styles.header}>
-  <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]} onPress={() => router.back()}>
-    <Ionicons name="arrow-back" size={22} color="#f8fafc" />
-  </Pressable>
-  <Text style={styles.headerTitle}>Find Contractors</Text>
-  <Pressable
-    style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-    onPress={() => router.push('/my-projects' as never)}
-  >
-    <Ionicons name="folder-outline" size={22} color="#f8fafc" />
-  </Pressable>
-</View>
+        <View style={styles.header}>
+          <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]} onPress={handleExitApp}>
+            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Find Contractors</Text>
+          <Pressable
+            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+            onPress={() => router.push('/post-project' as never)}
+          >
+            <Ionicons name="add" size={24} color="#f8fafc" />
+          </Pressable>
+        </View>
+
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={styles.searchWrap}>
             <Ionicons name="search" size={20} color="#64748b" />
@@ -109,14 +142,34 @@ export default function CustomerDashboard() {
           )}
           <View style={{ height: 100 }} />
         </ScrollView>
-        <View style={styles.bottomCtaWrap}>
+
+        {/* Bottom Tab Bar */}
+        <View style={styles.tabBarWrap}>
           <SafeAreaView edges={["bottom"]}>
-            <Pressable style={({ pressed }) => [styles.postBtnWrap, pressed && styles.pressed]} onPress={() => router.push("/post-project")}>
-              <LinearGradient colors={["#3b82f6", "#2563eb"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.postBtn}>
-                <Ionicons name="add-circle-outline" size={24} color="#ffffff" />
-                <Text style={styles.postBtnText}>Post a Project</Text>
-              </LinearGradient>
-            </Pressable>
+            <View style={styles.tabBar}>
+              {TABS.map((tab) => {
+                const active = tab.key === "home";
+                return (
+                  <Pressable
+                    key={tab.key}
+                    style={styles.tabItem}
+                    onPress={() => {
+                      if (tab.key === "home") return;
+                      router.replace(tab.route as never);
+                    }}
+                  >
+                    <Ionicons
+                      name={active ? tab.icon : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)}
+                      size={22}
+                      color={active ? "#22c55e" : "#64748b"}
+                    />
+                    <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                      {tab.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </SafeAreaView>
         </View>
       </SafeAreaView>
@@ -129,9 +182,13 @@ function ContractorCard({ contractor }: { contractor: any }) {
   const initials = contractor.name?.split(" ").map((n: string) => n[0]).join("").slice(0, 2) || "?";
   return (
     <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]} onPress={() => router.push(`/contractor-detail?id=${contractor.id}` as never)}>
-      <LinearGradient colors={["#3b82f6", "#2563eb"]} style={styles.avatar}>
-        <Text style={styles.avatarText}>{initials}</Text>
-      </LinearGradient>
+      {contractor.profile_photo_url ? (
+  <Image source={{ uri: contractor.profile_photo_url }} style={styles.avatarImage} />
+) : (
+  <LinearGradient colors={["#3b82f6", "#2563eb"]} style={styles.avatar}>
+    <Text style={styles.avatarText}>{initials}</Text>
+  </LinearGradient>
+)}
       <View style={styles.cardBody}>
         <Text style={styles.cardName}>{contractor.name}</Text>
         <Text style={styles.cardSkill}>{contractor.skill}</Text>
@@ -160,7 +217,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
   backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(30, 41, 59, 0.8)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#1e293b" },
   headerTitle: { fontSize: 18, fontWeight: "700", color: "#f8fafc", letterSpacing: -0.3 },
-  headerSpacer: { width: 40 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
   searchWrap: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(30, 41, 59, 0.7)", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: "#1e293b", marginBottom: 20 },
@@ -189,9 +245,33 @@ const styles = StyleSheet.create({
   distanceText: { fontSize: 12, color: "#64748b" },
   empty: { alignItems: "center", paddingVertical: 40, gap: 12 },
   emptyText: { fontSize: 15, color: "#64748b" },
-  bottomCtaWrap: { position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 12, backgroundColor: "rgba(15, 23, 42, 0.95)", borderTopWidth: 1, borderTopColor: "#1e293b" },
-  postBtnWrap: { borderRadius: 16, overflow: "hidden", marginBottom: 8 },
-  postBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 18, borderRadius: 16 },
-  postBtnText: { fontSize: 18, fontWeight: "700", color: "#ffffff", letterSpacing: -0.2 },
+  tabBarWrap: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(15, 23, 42, 0.95)",
+    borderTopWidth: 1,
+    borderTopColor: "#1e293b",
+  },
+  tabBar: {
+    flexDirection: "row",
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748b",
+  },
+  tabLabelActive: {
+    color: "#22c55e",
+  },
+  avatarImage: { width: 52, height: 52, borderRadius: 26 },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
 });

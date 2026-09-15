@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { setCurrentProfile } from "../lib/currentProfile";
 import { supabase } from "../lib/supabase";
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
@@ -27,10 +28,31 @@ function maskPhone(phone: string): string {
   return `+91 ${masked}`;
 }
 
+function maskEmail(email: string): string {
+  const [user, domain] = email.split('@');
+  if (!user || !domain) return email;
+  const maskedUser =
+    user.length <= 2 ? user[0] + '*' : user.slice(0, 2) + '*'.repeat(Math.max(user.length - 2, 1));
+  return `${maskedUser}@${domain}`;
+}
+
 export default function OtpScreen() {
   const router = useRouter();
-  const { phone = "", role = "client", reqId = "" } = useLocalSearchParams<{ phone?: string; role?: string; reqId?: string }>(); 
-const [verifying, setVerifying] = useState(false);
+  const {
+    phone = "",
+    role = "client",
+    reqId = "",
+    mode = "phone",
+    email = "",
+  } = useLocalSearchParams<{
+    phone?: string;
+    role?: string;
+    reqId?: string;
+    mode?: string;
+    email?: string;
+  }>();
+  const [verifying, setVerifying] = useState(false);
+  const [currentReqId, setCurrentReqId] = useState(String(reqId));
 
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [countdown, setCountdown] = useState(RESEND_SECONDS);
@@ -40,6 +62,7 @@ const [verifying, setVerifying] = useState(false);
 
   const otpValue = otp.join("");
   const isComplete = otpValue.length === OTP_LENGTH;
+  const isGoogleMode = mode === "google";
 
   useEffect(() => {
     if (canResend) return;
@@ -80,33 +103,94 @@ const [verifying, setVerifying] = useState(false);
   };
 
   const handleVerify = async () => {
-  
     if (!isComplete || verifying) return;
     setVerifying(true);
-  
+
     try {
-      const body = { reqId: String(reqId), otp: otpValue };
+      const body = { reqId: currentReqId, otp: otpValue };
       const response = await OTPWidget.verifyOTP(body);
       console.log('VERIFY RESPONSE:', JSON.stringify(response));
-  
+
       if (response.type !== 'success') {
         Alert.alert("Invalid Code", "The OTP you entered is incorrect or expired.");
         setVerifying(false);
         return;
       }
-  
+
+      if (isGoogleMode) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const session = sessionData?.session;
+
+        if (!session?.user) {
+          setVerifying(false);
+          Alert.alert("Session Expired", "Please sign in with Google again.");
+          router.replace('/welcome');
+          return;
+        }
+
+        const authUserId = session.user.id;
+
+        let existingProfile = null;
+        const { data: byAuthId } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('auth_user_id', authUserId)
+          .maybeSingle();
+        existingProfile = byAuthId;
+
+        if (!existingProfile && session.user.email) {
+          const { data: byEmail } = await supabase
+            .from('profiles')
+            .select('*')
+            .ilike('email', session.user.email)
+            .eq('user_type', String(role))
+            .is('auth_user_id', null)
+            .maybeSingle();
+
+          if (byEmail) {
+            await supabase.from('profiles').update({ auth_user_id: authUserId }).eq('id', byEmail.id);
+            existingProfile = { ...byEmail, auth_user_id: authUserId };
+          }
+        }
+
+        setVerifying(false);
+
+        if (existingProfile) {
+          setCurrentProfile(existingProfile.id, existingProfile.user_type);
+          if (existingProfile.user_type === 'contractor' && existingProfile.verification_status !== 'approved') {
+            router.dismissAll();
+            router.replace('/verification-pending');
+          } else {
+            router.replace(existingProfile.user_type === 'contractor' ? '/contractor' : '/customer');
+          }
+        } else {
+          router.replace({
+            pathname: '/signup',
+            params: {
+              role: String(role),
+              phone: session.user.phone || '',
+              email: session.user.email || '',
+            },
+          });
+        }
+        return;
+      }
+
+      // Phone-OTP flow
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('*')
         .eq('phone', String(phone))
         .eq('user_type', role)
         .maybeSingle();
-  
+
       setVerifying(false);
       if (existingProfile) {
+        setCurrentProfile(existingProfile.id, existingProfile.user_type);
         if (role === 'contractor' && existingProfile.verification_status !== 'approved') {
           router.replace('/verification-pending');
         } else {
+          router.dismissAll();
           router.replace(role === 'contractor' ? '/contractor' : '/customer');
         }
       }
@@ -122,7 +206,7 @@ const [verifying, setVerifying] = useState(false);
     }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (!canResend) return;
 
     setOtp(Array(OTP_LENGTH).fill(""));
@@ -130,7 +214,20 @@ const [verifying, setVerifying] = useState(false);
     setCanResend(false);
     inputRefs.current[0]?.focus();
 
-    // Call resend OTP API
+    try {
+      const identifier = isGoogleMode
+        ? String(email)
+        : '91' + String(phone).replace(/\D/g, "").slice(-10);
+
+      const response = await OTPWidget.sendOTP({ identifier });
+      if (response.type === 'success') {
+        setCurrentReqId(response.message);
+      } else {
+        Alert.alert("Error", "Could not resend OTP. Please try again.");
+      }
+    } catch (err) {
+      Alert.alert("Error", "Could not resend OTP. Please try again.");
+    }
   };
 
   return (
@@ -161,9 +258,9 @@ const [verifying, setVerifying] = useState(false);
 
           <View style={styles.content}>
             {/* Title */}
-            <Text style={styles.title}>Verify Phone</Text>
+            <Text style={styles.title}>{isGoogleMode ? "Verify Email" : "Verify Phone"}</Text>
             <Text style={styles.subtitle}>
-              We sent a 6-digit code to {maskPhone(String(phone))}
+              We sent a 6-digit code to {isGoogleMode ? maskEmail(String(email)) : maskPhone(String(phone))}
             </Text>
 
             {/* OTP boxes */}

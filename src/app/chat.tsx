@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -30,7 +31,8 @@ export default function ChatScreen() {
   const otherId = viewerRole === "client" ? Number(contractorId) : Number(clientId);
 
   const [otherName, setOtherName] = useState("Chat");
-  const [projectTitle, setProjectTitle] = useState("");
+  const [project, setProject] = useState<any>(null);
+  const [showProjectInfo, setShowProjectInfo] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
 
@@ -49,6 +51,16 @@ export default function ChatScreen() {
   };
 
   useEffect(() => {
+    const markAsRead = async () => {
+      await supabase
+        .from('messages')
+        .update({ is_read: true })
+        .eq('project_id', projectId)
+        .eq('sender_id', otherId)
+        .eq('receiver_id', myId)
+        .eq('is_read', false);
+    };
+
     const loadHeaderInfo = async () => {
       const { data: otherProfile } = await supabase
         .from('profiles')
@@ -57,22 +69,12 @@ export default function ChatScreen() {
         .single();
       if (otherProfile) setOtherName(otherProfile.name);
 
-      const markAsRead = async () => {
-        await supabase
-          .from('messages')
-          .update({ is_read: true })
-          .eq('project_id', projectId)
-          .eq('sender_id', otherId)
-          .eq('receiver_id', myId)
-          .eq('is_read', false);
-      };
-
-      const { data: project } = await supabase
+      const { data: projectData } = await supabase
         .from('projects')
-        .select('title')
+        .select('*')
         .eq('id', projectId)
         .single();
-      if (project) setProjectTitle(project.title);
+      if (projectData) setProject(projectData);
     };
 
     if (otherId && projectId) {
@@ -123,11 +125,11 @@ export default function ChatScreen() {
       <View style={styles.glowBlue} />
 
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      <KeyboardAvoidingView
-  style={styles.flex}
-  behavior={Platform.OS === "ios" ? "padding" : "height"}
-  keyboardVerticalOffset={0}
->
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+        >
           {/* Header */}
           <View style={styles.header}>
             <Pressable
@@ -146,6 +148,17 @@ export default function ChatScreen() {
             <View style={styles.headerSpacer} />
           </View>
 
+          {/* Persistent project bar — OLX-style, tap for full details, stays visible while scrolling */}
+          {project ? (
+            <Pressable style={styles.projectBar} onPress={() => setShowProjectInfo(true)}>
+              <Ionicons name="construct-outline" size={15} color="#22c55e" />
+              <Text style={styles.projectBarText} numberOfLines={1}>
+                {project.title}
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color="#64748b" />
+            </Pressable>
+          ) : null}
+
           {/* Messages */}
           <ScrollView
             ref={scrollRef}
@@ -156,13 +169,6 @@ export default function ChatScreen() {
               scrollRef.current?.scrollToEnd({ animated: false })
             }
           >
-            {projectTitle ? (
-              <View style={styles.projectTag}>
-                <Ionicons name="construct-outline" size={14} color="#22c55e" />
-                <Text style={styles.projectTagText}>{projectTitle}</Text>
-              </View>
-            ) : null}
-
             {messages.length === 0 ? (
               <Text style={styles.emptyText}>No messages yet. Say hi!</Text>
             ) : (
@@ -237,6 +243,66 @@ export default function ChatScreen() {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Full Project Info — OLX-style bottom sheet */}
+      <Modal
+        visible={showProjectInfo}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowProjectInfo(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowProjectInfo(false)}>
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalKicker}>Project Details</Text>
+              <Pressable onPress={() => setShowProjectInfo(false)}>
+                <Ionicons name="close" size={22} color="#94a3b8" />
+              </Pressable>
+            </View>
+
+            {project ? (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={styles.modalProjectTitle}>{project.title}</Text>
+
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalLabel}>Category</Text>
+                  <Text style={styles.modalValue}>{project.category}</Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalLabel}>Budget</Text>
+                  <Text style={styles.modalValue}>{project.budget}</Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalLabel}>Timeline</Text>
+                  <Text style={styles.modalValue}>{project.timeline}</Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalLabel}>Location</Text>
+                  <Text style={styles.modalValue}>{project.location}</Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalLabel}>Posted</Text>
+                  <Text style={styles.modalValue}>
+                    {new Date(project.created_at).toLocaleDateString()}
+                  </Text>
+                </View>
+
+                {viewerRole === 'client' && (
+                  <View style={styles.modalRow}>
+                    <Text style={styles.modalLabel}>Confirmation Code</Text>
+                    <Text style={styles.modalValueCode}>{project.confirmation_code}</Text>
+                  </View>
+                )}
+
+                <Text style={styles.modalDescLabel}>Description</Text>
+                <Text style={styles.modalDesc}>{project.description}</Text>
+              </ScrollView>
+            ) : (
+              <Text style={styles.emptyText}>Loading...</Text>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -303,6 +369,22 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 40,
   },
+  projectBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: "rgba(34, 197, 94, 0.08)",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(34, 197, 94, 0.2)",
+  },
+  projectBarText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#22c55e",
+  },
   messagesScroll: {
     flex: 1,
   },
@@ -311,24 +393,6 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 16,
     gap: 10,
-  },
-  projectTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "center",
-    gap: 6,
-    backgroundColor: "rgba(34, 197, 94, 0.1)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(34, 197, 94, 0.25)",
-    marginBottom: 8,
-  },
-  projectTagText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#22c55e",
   },
   emptyText: {
     textAlign: "center",
@@ -424,5 +488,75 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
     transform: [{ scale: 0.96 }],
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    backgroundColor: "#0f172a",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    maxHeight: "75%",
+    borderWidth: 1,
+    borderColor: "#1e293b",
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalKicker: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  modalProjectTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#f8fafc",
+    marginBottom: 16,
+  },
+  modalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1e293b",
+  },
+  modalLabel: {
+    fontSize: 14,
+    color: "#64748b",
+  },
+  modalValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#f8fafc",
+  },
+  modalValueCode: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#22c55e",
+    letterSpacing: 2,
+  },
+  modalDescLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  modalDesc: {
+    fontSize: 14,
+    color: "#cbd5e1",
+    lineHeight: 21,
+    paddingBottom: 20,
   },
 });

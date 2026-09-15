@@ -150,7 +150,7 @@ export default function PostProjectScreen() {
         timeline,
         client_id: clientId,
         confirmation_code: confirmationCode,
-        contractor_id: targetContractorId ? parseInt(targetContractorId) : null,
+        target_contractor_id: targetContractorId ? parseInt(targetContractorId) : null,
       });
 
     setPosting(false);

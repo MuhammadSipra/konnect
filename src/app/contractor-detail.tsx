@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator, Alert, Image,
+  ActivityIndicator, Alert, Dimensions, Image,
   Pressable,
   ScrollView,
   StatusBar,
@@ -13,6 +13,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const PORTFOLIO_ITEM_SIZE = (SCREEN_WIDTH - 40 - 12) / 2; // 40 = scrollContent horizontal padding, 12 = grid gap
 
 export default function ContractorDetailScreen() {
   const router = useRouter();
@@ -125,9 +128,13 @@ export default function ContractorDetailScreen() {
         </View>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.hero}>
-            <LinearGradient colors={["#22c55e", "#16a34a"]} style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </LinearGradient>
+          {profile.profile_photo_url ? (
+  <Image source={{ uri: profile.profile_photo_url }} style={styles.avatarImage} />
+) : (
+  <LinearGradient colors={["#22c55e", "#16a34a"]} style={styles.avatar}>
+    <Text style={styles.avatarText}>{initials}</Text>
+  </LinearGradient>
+)}
             <Text style={styles.name}>{profile.name}</Text>
             <Text style={styles.skill}>{profile.skill || "Contractor"}</Text>
             <View style={styles.ratingRow}>
@@ -168,10 +175,14 @@ export default function ContractorDetailScreen() {
             </View>
           ) : (
             <View style={styles.portfolioGrid}>
-              {portfolio.map((item) => (
-                <Image key={item.id} source={{ uri: item.photo_url }} style={styles.portfolioItem} />
-              ))}
-            </View>
+  {portfolio.map((item) => (
+    <Image
+      key={item.id}
+      source={{ uri: item.photo_url }}
+      style={[styles.portfolioItem, { width: PORTFOLIO_ITEM_SIZE, height: PORTFOLIO_ITEM_SIZE }]}
+    />
+  ))}
+</View>
           )}
 
           <Text style={styles.sectionTitle}>Reviews</Text>
@@ -266,7 +277,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: "rgba(30,41,59,0.6)", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#1e293b", marginBottom: 24 },
   bio: { fontSize: 15, color: "#94a3b8", lineHeight: 24 },
   portfolioGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 24 },
-  portfolioItem: { width: "47%", aspectRatio: 1, borderRadius: 14, backgroundColor: "#1e293b" },
+  portfolioItem: {  borderRadius: 14, backgroundColor: "#1e293b" },
   reviewCard: { backgroundColor: "rgba(30,41,59,0.6)", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#1e293b", marginBottom: 12 },
   reviewHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
   reviewAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#334155", alignItems: "center", justifyContent: "center" },
@@ -283,5 +294,6 @@ const styles = StyleSheet.create({
   hireWrap: { flex: 2, borderRadius: 14, overflow: "hidden" },
   hireBtn: { paddingVertical: 16, alignItems: "center", borderRadius: 14, paddingHorizontal: 8 },
   hireBtnText: { fontSize: 14, fontWeight: "700", color: "#fff", textAlign: "center" },
+  avatarImage: { width: 96, height: 96, borderRadius: 48, marginBottom: 16 },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
 });

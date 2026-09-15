@@ -1,11 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
+  Image,
+  Modal,
   Pressable,
   ScrollView,
   StatusBar,
@@ -25,6 +29,13 @@ import { supabase } from '../lib/supabase';
     { key: "profile", label: "Profile", icon: "person" as const, route: "/profile" },
   ];
 
+  const CONTRACTOR_CANCEL_REASONS = [
+    "Client changed requirements",
+    "Price or budget issue",
+    "Can't take the project right now",
+    "Other",
+  ];
+
   export default function ContractorDashboard() {
     const router = useRouter();
     const [contractorId, setContractorId] = useState<number | null>(null);
@@ -32,12 +43,14 @@ import { supabase } from '../lib/supabase';
 
     const [profile, setProfile] = useState<any>(null);
     const [avgRating, setAvgRating] = useState(0);
-const [reviewCount, setReviewCount] = useState(0);
+    const [reviewCount, setReviewCount] = useState(0);
     const [leads, setLeads] = useState<any[]>([]);
     const [activeJobs, setActiveJobs] = useState<any[]>([]);
     const [bidStatuses, setBidStatuses] = useState<Record<number, string>>({});
+    const [bidCancelInfo, setBidCancelInfo] = useState<Record<number, { cancelled_by?: string; cancellation_reason?: string }>>({});
     const [portfolio, setPortfolio] = useState<any[]>([]);
-const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [cancelReasonLeadId, setCancelReasonLeadId] = useState<number | null>(null);
 
     // Resolve who's logged in — memory first, otherwise fall back to the Supabase session
     const resolveContractorId = async (): Promise<number | null> => {
@@ -79,24 +92,24 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
         .order('created_at', { ascending: false });
       if (data) setPortfolio(data);
     };
-    
+
     const handleAddPortfolioPhoto = async () => {
       if (!contractorId) return;
-    
+
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
         Alert.alert("Permission needed", "Please allow photo access to upload portfolio photos.");
         return;
       }
-    
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.7,
       });
       if (result.canceled || !result.assets[0]) return;
-    
+
       setUploadingPhoto(true);
-    
+
       try {
         const uri = result.assets[0].uri;
         const response = await fetch(uri);
@@ -104,24 +117,24 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
         const arrayBuffer = await new Response(blob).arrayBuffer();
         const fileExt = uri.split('.').pop() || 'jpg';
         const fileName = `portfolio/${contractorId}_${Date.now()}.${fileExt}`;
-    
+
         const { error: uploadError } = await supabase.storage
           .from('documents')
           .upload(fileName, arrayBuffer, { contentType: blob.type || 'image/jpeg' });
-    
+
         if (uploadError) {
           Alert.alert("Upload Error", uploadError.message);
           setUploadingPhoto(false);
           return;
         }
-    
+
         const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
-    
+
         await supabase.from('portfolio_photos').insert({
           contractor_id: contractorId,
           photo_url: urlData.publicUrl,
         });
-    
+
         await getPortfolio(contractorId);
       } catch (err) {
         Alert.alert("Error", "Could not upload photo.");
@@ -173,17 +186,20 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
     const getBidStatuses = async (id: number) => {
       const { data, error } = await supabase
         .from('bids')
-        .select('project_id, status')
+        .select('project_id, status, cancelled_by, cancellation_reason')
         .eq('contractor_id', id);
 
       console.log('BID STATUSES:', data, 'ERROR:', error);
 
       if (data) {
         const map: Record<number, string> = {};
+        const cancelMap: Record<number, { cancelled_by?: string; cancellation_reason?: string }> = {};
         data.forEach((b) => {
           map[b.project_id] = b.status;
+          cancelMap[b.project_id] = { cancelled_by: b.cancelled_by, cancellation_reason: b.cancellation_reason };
         });
         setBidStatuses(map);
+        setBidCancelInfo(cancelMap);
       }
     };
 
@@ -217,7 +233,27 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
       };
       init();
     }, []);
+    const handleExitApp = () => {
+      Alert.alert(
+        "Exit Konnect?",
+        "Are you sure you want to exit the app?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Exit", style: "destructive", onPress: () => BackHandler.exitApp() },
+        ]
+      );
+    };
 
+    useFocusEffect(
+      useCallback(() => {
+        const onBackPress = () => {
+          handleExitApp();
+          return true;
+        };
+        const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+        return () => subscription.remove();
+      }, [])
+    );
     const handleInterested = async (leadId: number) => {
       if (!contractorId) return;
 
@@ -248,88 +284,102 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
       }
     };
 
+    // Cancelling a bid that was never confirmed = always free, no reason needed.
+    // Cancelling a CONFIRMED bid = opens the reason picker below.
     const handleCancel = async (leadId: number) => {
       if (!contractorId) return;
       const status = bidStatuses[leadId];
       const isConfirmedBid = status === 'confirmed' || status === 'accepted';
 
+      if (isConfirmedBid) {
+        setCancelReasonLeadId(leadId);
+        return;
+      }
+
       Alert.alert(
-        isConfirmedBid ? "Cancel Confirmed Job" : "Cancel Interest",
-        isConfirmedBid
-          ? "Are you sure? Since this job was confirmed, cancelling now may lead to a trust score and wallet penalty (unless this is your first cancellation this month). A second cancellation on this same project will block you from it permanently."
-          : "Are you sure you want to withdraw your interest? No penalty applies before confirmation.",
+        "Cancel Interest",
+        "Are you sure you want to withdraw your interest? No penalty applies before confirmation.",
         [
           { text: "No", style: "cancel" },
           {
             text: "Yes, Cancel",
             style: "destructive",
             onPress: async () => {
-              if (isConfirmedBid) {
-                const { data: profileData } = await supabase
-                  .from('profiles')
-                  .select('cancellations_this_month, last_cancel_month, trust_score, wallet_balance')
-                  .eq('id', contractorId)
-                  .single();
-
-                const currentMonth = new Date().toISOString().slice(0, 7);
-                let newCount = 1;
-                let newTrustScore = profileData?.trust_score ?? 100;
-                let newWallet = profileData?.wallet_balance ?? 0;
-
-                if (profileData?.last_cancel_month === currentMonth) {
-                  newCount = (profileData?.cancellations_this_month || 0) + 1;
-                }
-
-                if (newCount > 1) {
-                  newTrustScore = Math.max(0, newTrustScore - 10);
-                  newWallet = Math.max(0, newWallet - 50);
-                }
-
-                await supabase
-                  .from('profiles')
-                  .update({
-                    cancellations_this_month: newCount,
-                    last_cancel_month: currentMonth,
-                    trust_score: newTrustScore,
-                    wallet_balance: newWallet,
-                  })
-                  .eq('id', contractorId);
-
-                await supabase
-                  .from('bids')
-                  .update({ status: 'pending', not_selected_at: null })
-                  .eq('project_id', leadId)
-                  .eq('status', 'not_selected');
-
-                const { data: myBid } = await supabase
-                  .from('bids')
-                  .select('id, cancel_count')
-                  .eq('project_id', leadId)
-                  .eq('contractor_id', contractorId)
-                  .single();
-
-                const newCancelCount = (myBid?.cancel_count || 0) + 1;
-
-                await supabase
-                  .from('bids')
-                  .update({
-                    status: newCancelCount >= 2 ? 'blocked' : 'pending',
-                    cancel_count: newCancelCount,
-                  })
-                  .eq('id', myBid?.id);
-              } else {
-                await supabase
-                  .from('bids')
-                  .delete()
-                  .eq('project_id', leadId)
-                  .eq('contractor_id', contractorId);
-              }
-
+              await supabase
+                .from('bids')
+                .delete()
+                .eq('project_id', leadId)
+                .eq('contractor_id', contractorId);
               refreshAll(contractorId);
             },
           },
         ]
       );
+    };
+
+    // Contractor-initiated cancellation of a CONFIRMED bid: keeps the existing
+    // penalty rules (1st free, 2nd+ trust/wallet hit, per-project block after 2nd).
+    const submitContractorCancellation = async (reason: string) => {
+      if (!contractorId || cancelReasonLeadId === null) return;
+      const leadId = cancelReasonLeadId;
+      setCancelReasonLeadId(null);
+
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('cancellations_this_month, last_cancel_month, trust_score, wallet_balance')
+        .eq('id', contractorId)
+        .single();
+
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      let newCount = 1;
+      let newTrustScore = profileData?.trust_score ?? 100;
+      let newWallet = profileData?.wallet_balance ?? 0;
+
+      if (profileData?.last_cancel_month === currentMonth) {
+        newCount = (profileData?.cancellations_this_month || 0) + 1;
+      }
+
+      if (newCount > 1) {
+        newTrustScore = Math.max(0, newTrustScore - 10);
+        newWallet = Math.max(0, newWallet - 50);
+      }
+
+      await supabase
+        .from('profiles')
+        .update({
+          cancellations_this_month: newCount,
+          last_cancel_month: currentMonth,
+          trust_score: newTrustScore,
+          wallet_balance: newWallet,
+        })
+        .eq('id', contractorId);
+
+      await supabase
+        .from('bids')
+        .update({ status: 'pending', not_selected_at: null })
+        .eq('project_id', leadId)
+        .eq('status', 'not_selected');
+
+      const { data: myBid } = await supabase
+        .from('bids')
+        .select('id, cancel_count')
+        .eq('project_id', leadId)
+        .eq('contractor_id', contractorId)
+        .single();
+
+      const newCancelCount = (myBid?.cancel_count || 0) + 1;
+
+      await supabase
+        .from('bids')
+        .update({
+          status: newCancelCount >= 2 ? 'blocked' : 'pending',
+          cancel_count: newCancelCount,
+          cancelled_by: 'contractor',
+          cancellation_reason: reason,
+        })
+        .eq('id', myBid?.id);
+
+      refreshAll(contractorId);
     };
 
     const handleConfirmCode = async (leadId: number, enteredCode: string) => {
@@ -425,10 +475,10 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
         <SafeAreaView style={styles.safe} edges={["top"]}>
           {/* Header */}
           <View style={styles.header}>
-            <Pressable
-              style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-              onPress={() => router.back()}
-            >
+          <Pressable
+  style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+  onPress={handleExitApp}
+>
               <Ionicons name="arrow-back" size={22} color="#f8fafc" />
             </Pressable>
             <Text style={styles.headerTitle}>Contractor Dashboard</Text>
@@ -446,13 +496,17 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
                 colors={["#1e293b", "#0f172a"]}
                 style={styles.profileGradient}
               >
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {profile?.name
-                      ? profile.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
-                      : '..'}
-                  </Text>
-                </View>
+               <View style={styles.avatar}>
+  {profile?.profile_photo_url ? (
+    <Image source={{ uri: profile.profile_photo_url }} style={styles.avatarImage} />
+  ) : (
+    <Text style={styles.avatarText}>
+      {profile?.name
+        ? profile.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+        : '..'}
+    </Text>
+  )}
+</View>
                 <View style={styles.profileInfo}>
                   <Text style={styles.profileName}>{profile?.name || 'Loading...'}</Text>
                   <Text style={styles.profileSkill}>{profile?.skill || ''}</Text>
@@ -483,9 +537,6 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
   ))}
 </ScrollView>
 
-{/* Active Jobs */}
-<SectionHeader title="Active Jobs" action="See all" />
-
             {/* Active Jobs */}
             <SectionHeader title="Active Jobs" action="See all" />
             {activeJobs.map((job) => (
@@ -502,12 +553,15 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
             {leads
               .filter((lead) => !activeJobs.some((job) => job.id === lead.id))
               .filter((lead) => bidStatuses[lead.id] !== 'blocked')
+              .filter((lead) => bidStatuses[lead.id] !== 'completed')
               .filter((lead) => !lead.target_contractor_id || lead.target_contractor_id === contractorId)
               .map((lead) => (
                 <LeadCard
                   key={lead.id}
                   lead={lead}
                   bidStatus={bidStatuses[lead.id]}
+                  cancelInfo={bidCancelInfo[lead.id]}
+                  contractorId={contractorId}
                   onInterested={() => handleInterested(lead.id)}
                   onCancel={() => handleCancel(lead.id)}
                   onConfirmCode={(code) => handleConfirmCode(lead.id, code)}
@@ -529,7 +583,7 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
                       style={styles.tabItem}
                       onPress={() => {
                         if (tab.key === "home") return;
-                        router.push(tab.route as never);
+                        router.replace(tab.route as never);
                       }}
                     >
                       <Ionicons
@@ -547,6 +601,29 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
             </SafeAreaView>
           </View>
         </SafeAreaView>
+
+        {/* Cancellation reason picker — shown for CONFIRMED bids only */}
+        <Modal visible={cancelReasonLeadId !== null} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Why are you cancelling?</Text>
+              <View style={{ marginTop: 16, gap: 10 }}>
+                {CONTRACTOR_CANCEL_REASONS.map((reason) => (
+                  <Pressable
+                    key={reason}
+                    style={styles.reasonOption}
+                    onPress={() => submitContractorCancellation(reason)}
+                  >
+                    <Text style={styles.reasonOptionText}>{reason}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Pressable style={styles.modalDismissBtn} onPress={() => setCancelReasonLeadId(null)}>
+                <Text style={styles.modalDismissBtnText}>Never mind</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }
@@ -610,18 +687,23 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
   function LeadCard({
     lead,
     bidStatus,
+    cancelInfo,
+    contractorId,
     onInterested,
     onCancel,
     onConfirmCode,
   }: {
     lead: any;
     bidStatus?: string;
+    cancelInfo?: { cancelled_by?: string; cancellation_reason?: string };
+    contractorId: number;
     onInterested: () => void;
     onCancel: () => void;
     onConfirmCode: (code: string) => void;
   }) {
+    const router = useRouter();
     const [codeInput, setCodeInput] = useState("");
-
+    const isTargeted = lead.target_contractor_id === contractorId;
     const isLocked = bidStatus === 'locked';
     const isConfirmed = bidStatus === 'accepted' || bidStatus === 'confirmed';
     const isPending = bidStatus === 'pending';
@@ -630,11 +712,18 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
       bidStatus === 'cancelled_by_client' ||
       bidStatus === 'cancelled_by_contractor';
     const isNotSelected = bidStatus === 'not_selected';
+    const wasClientCancelled = isPending && cancelInfo?.cancelled_by === 'client';
 
     return (
-      <Pressable style={({ pressed }) => [styles.card, styles.leadCard, pressed && styles.pressed]}>
-        <View style={styles.leadAccent} />
+      <Pressable style={({ pressed }) => [styles.card, styles.leadCard, isTargeted && styles.leadCardTargeted, pressed && styles.pressed]}>
+        <View style={[styles.leadAccent, isTargeted && styles.leadAccentTargeted]} />
         <View style={styles.leadContent}>
+          {isTargeted && (
+            <View style={styles.targetedBadge}>
+              <Ionicons name="star" size={10} color="#fbbf24" />
+              <Text style={styles.targetedBadgeText}>Sent to you directly</Text>
+            </View>
+          )}
           <View style={styles.cardTop}>
             <Text style={styles.cardTitle}>{lead.title}</Text>
             <Text style={styles.leadTime}>{new Date(lead.created_at).toLocaleDateString()}</Text>
@@ -645,27 +734,37 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
           </View>
 
           {isLocked && (
-            <View style={styles.codeEntryWrap}>
-              <Text style={styles.codeEntryLabel}>Client shortlisted you! Enter their confirmation code:</Text>
-              <View style={styles.codeEntryRow}>
-                <TextInput
-                  style={styles.codeInput}
-                  placeholder="4-digit code"
-                  placeholderTextColor="#64748b"
-                  value={codeInput}
-                  onChangeText={setCodeInput}
-                  keyboardType="number-pad"
-                  maxLength={4}
-                />
-                <Pressable
-                  style={styles.codeSubmitBtn}
-                  onPress={() => onConfirmCode(codeInput)}
-                >
-                  <Text style={styles.codeSubmitText}>Confirm</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
+  <View style={styles.codeEntryWrap}>
+    <Text style={styles.codeEntryLabel}>
+      Client shortlisted you! Message them to discuss, then enter the code they share:
+    </Text>
+    <Pressable
+      style={styles.messageBtn}
+      onPress={() =>
+        router.push(
+          `/chat?contractorId=${contractorId}&projectId=${lead.id}&clientId=${lead.client_id}&viewerRole=contractor` as never
+        )
+      }
+    >
+      <Ionicons name="chatbubble-outline" size={13} color="#3b82f6" />
+      <Text style={styles.messageBtnText}>Message Client</Text>
+    </Pressable>
+    <View style={styles.codeEntryRow}>
+      <TextInput
+        style={styles.codeInput}
+        placeholder="4-digit code"
+        placeholderTextColor="#64748b"
+        value={codeInput}
+        onChangeText={setCodeInput}
+        keyboardType="number-pad"
+        maxLength={4}
+      />
+      <Pressable style={styles.codeSubmitBtn} onPress={() => onConfirmCode(codeInput)}>
+        <Text style={styles.codeSubmitText}>Confirm</Text>
+      </Pressable>
+    </View>
+  </View>
+)}
 
           <View style={styles.leadFooter}>
             <Text style={styles.cardBudget}>{lead.budget}</Text>
@@ -680,10 +779,21 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
                 </Pressable>
               </View>
             ) : isLocked ? null : isPending ? (
-              <View style={{ alignItems: "flex-end", gap: 4 }}>
-                <View style={styles.pendingBadge}>
-                  <Text style={styles.pendingBadgeText}>Pending</Text>
-                </View>
+              <View style={{ alignItems: "flex-end", gap: 4, maxWidth: 160 }}>
+                {wasClientCancelled ? (
+                  <>
+                    <View style={styles.warningBadge}>
+                      <Text style={styles.warningBadgeText}>Client Cancelled</Text>
+                    </View>
+                    <Text style={styles.cancelledHelperText}>
+                      You were confirmed{cancelInfo?.cancellation_reason ? ` — ${cancelInfo.cancellation_reason}` : ''}
+                    </Text>
+                  </>
+                ) : (
+                  <View style={styles.pendingBadge}>
+                    <Text style={styles.pendingBadgeText}>Pending</Text>
+                  </View>
+                )}
                 <Pressable onPress={onCancel}>
                   <Text style={styles.cancelLink}>Cancel</Text>
                 </Pressable>
@@ -814,6 +924,7 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
       fontWeight: "800",
       color: "#ffffff",
     },
+    avatarImage: { width: 64, height: 64, borderRadius: 32 },
     profileInfo: {
       flex: 1,
     },
@@ -861,6 +972,26 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
       fontSize: 14,
       fontWeight: "600",
       color: "#22c55e",
+    },
+    leadAccentTargeted: {
+      backgroundColor: "#fbbf24",
+    },
+    leadCardTargeted: {
+      borderColor: "rgba(251, 191, 36, 0.35)",
+      backgroundColor: "rgba(251, 191, 36, 0.04)",
+    },
+    targetedBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      marginBottom: 6,
+    },
+    targetedBadgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: "#fbbf24",
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
     },
     addPhotoBtn: {
       width: 90,
@@ -985,6 +1116,25 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
       fontWeight: "700",
       color: "#fbbf24",
     },
+    warningBadge: {
+      backgroundColor: "rgba(249, 115, 22, 0.15)",
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: "rgba(249, 115, 22, 0.35)",
+    },
+    warningBadgeText: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: "#f97316",
+    },
+    cancelledHelperText: {
+      fontSize: 11,
+      color: "#f97316",
+      textAlign: "right",
+      fontWeight: "500",
+    },
     confirmedBadge: {
       backgroundColor: "rgba(34, 197, 94, 0.15)",
       paddingHorizontal: 14,
@@ -1098,5 +1248,49 @@ const [uploadingPhoto, setUploadingPhoto] = useState(false);
     },
     tabLabelActive: {
       color: "#22c55e",
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.7)",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 24,
+    },
+    modalCard: {
+      width: "100%",
+      backgroundColor: "#0f172a",
+      borderRadius: 20,
+      padding: 24,
+      borderWidth: 1,
+      borderColor: "#1e293b",
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: "#f8fafc",
+      textAlign: "center",
+    },
+    reasonOption: {
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+      backgroundColor: "rgba(30,41,59,0.7)",
+      borderWidth: 1,
+      borderColor: "#1e293b",
+    },
+    reasonOptionText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: "#f8fafc",
+    },
+    modalDismissBtn: {
+      marginTop: 16,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    modalDismissBtnText: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: "#64748b",
     },
   });

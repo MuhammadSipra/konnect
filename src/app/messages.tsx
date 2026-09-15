@@ -133,7 +133,7 @@ export default function MessagesScreen() {
 
   const handleTabPress = (tab: (typeof TABS)[number]) => {
     if (tab.key === "messages") return;
-    router.push(tab.route as never);
+    router.replace(tab.route as never);
   };
 
   const handleConversationPress = (conv: any) => {

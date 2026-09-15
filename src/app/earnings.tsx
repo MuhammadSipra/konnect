@@ -1,19 +1,78 @@
-import { View, Text, ScrollView, Pressable, StyleSheet, StatusBar } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { getCurrentProfileId } from '../lib/currentProfile';
+import { supabase } from '../lib/supabase';
 
-const TRANSACTIONS = [
-  { id: "1", project: "Kitchen Renovation", client: "Priya Sharma", amount: "+₹42,500", date: "Today", status: "credited", color: "#22c55e" },
-  { id: "2", project: "Bathroom Tiling", client: "Rahul Mehta", amount: "+₹16,000", date: "Yesterday", status: "credited", color: "#22c55e" },
-  { id: "3", project: "Office Partition", client: "Amit Corp", amount: "+₹28,000", date: "3 days ago", status: "credited", color: "#22c55e" },
-  { id: "4", project: "Platform Fee", client: "Konnect", amount: "-₹2,850", date: "3 days ago", status: "deducted", color: "#f87171" },
-  { id: "5", project: "Living Room Work", client: "Neha Shah", amount: "+₹35,000", date: "1 week ago", status: "credited", color: "#22c55e" },
-];
+async function resolveContractorId(): Promise<number | null> {
+  const cached = getCurrentProfileId();
+  if (cached) return cached;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const authUserId = sessionData?.session?.user?.id;
+  if (!authUserId) return null;
+
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('auth_user_id', authUserId)
+    .eq('user_type', 'contractor')
+    .maybeSingle();
+
+  return profileRow?.id ?? null;
+}
 
 export default function EarningsScreen() {
   const router = useRouter();
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [totalCompleted, setTotalCompleted] = useState(0);
+  const [completedThisMonth, setCompletedThisMonth] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      const id = await resolveContractorId();
+      if (!id) {
+        setLoading(false);
+        return;
+      }
+
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('wallet_balance')
+        .eq('id', id)
+        .single();
+      setWalletBalance(profileData?.wallet_balance ?? 0);
+
+      const { data: completedBids } = await supabase
+        .from('bids')
+        .select('completed_at')
+        .eq('contractor_id', id)
+        .eq('status', 'completed');
+
+      const all = completedBids || [];
+      setTotalCompleted(all.length);
+
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const thisMonth = all.filter((b) => b.completed_at?.slice(0, 7) === currentMonth);
+      setCompletedThisMonth(thisMonth.length);
+
+      setLoading(false);
+    };
+    load();
+  }, []);
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
@@ -24,52 +83,48 @@ export default function EarningsScreen() {
             <Ionicons name="arrow-back" size={22} color="#f8fafc" />
           </Pressable>
           <Text style={styles.headerTitle}>Earnings</Text>
-          <View style={{ width: 40 }} />
+          <View style={styles.iconBtn} />
         </View>
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-          <LinearGradient colors={["#16a34a", "#15803d"]} style={styles.balanceCard}>
-            <Text style={styles.balanceLabel}>Total Earnings This Month</Text>
-            <Text style={styles.balanceAmount}>₹1,21,500</Text>
-            <View style={styles.balanceRow}>
-              <View style={styles.balanceStat}>
-                <Text style={styles.balanceStatVal}>84</Text>
-                <Text style={styles.balanceStatLbl}>Jobs Done</Text>
+
+        {loading ? (
+          <View style={styles.centerWrap}>
+            <ActivityIndicator size="large" color="#22c55e" />
+          </View>
+        ) : (
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.walletCard}>
+              <Text style={styles.walletLabel}>Wallet Balance</Text>
+              <Text style={styles.walletValue}>₹{walletBalance}</Text>
+            </View>
+
+            <View style={styles.statsRow}>
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>{totalCompleted}</Text>
+                <Text style={styles.statLabel}>Jobs Completed</Text>
               </View>
-              <View style={styles.balanceDivider} />
-              <View style={styles.balanceStat}>
-                <Text style={styles.balanceStatVal}>₹8,750</Text>
-                <Text style={styles.balanceStatLbl}>Pending</Text>
-              </View>
-              <View style={styles.balanceDivider} />
-              <View style={styles.balanceStat}>
-                <Text style={styles.balanceStatVal}>4.8★</Text>
-                <Text style={styles.balanceStatLbl}>Rating</Text>
+              <View style={styles.statDivider} />
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>{completedThisMonth}</Text>
+                <Text style={styles.statLabel}>This Month</Text>
               </View>
             </View>
-          </LinearGradient>
 
-          <Pressable style={styles.withdrawBtn}>
-            <LinearGradient colors={["#3b82f6", "#2563eb"]} style={styles.withdrawGradient}>
-              <Ionicons name="arrow-down-circle-outline" size={20} color="#fff" />
-              <Text style={styles.withdrawText}>Withdraw to Bank</Text>
-            </LinearGradient>
-          </Pressable>
+            <Pressable style={styles.historyBtn} onPress={() => router.push("/history" as never)}>
+              <Ionicons name="time-outline" size={18} color="#f8fafc" />
+              <Text style={styles.historyBtnText}>View Job History</Text>
+              <Ionicons name="chevron-forward" size={18} color="#64748b" />
+            </Pressable>
 
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          {TRANSACTIONS.map((t) => (
-            <View key={t.id} style={styles.txCard}>
-              <View style={[styles.txIcon, { backgroundColor: t.color + "20" }]}>
-                <Ionicons name={t.status === "credited" ? "arrow-down" : "arrow-up"} size={18} color={t.color} />
-              </View>
-              <View style={styles.txBody}>
-                <Text style={styles.txProject}>{t.project}</Text>
-                <Text style={styles.txClient}>{t.client} · {t.date}</Text>
-              </View>
-              <Text style={[styles.txAmount, { color: t.color }]}>{t.amount}</Text>
+            <View style={styles.noteBox}>
+              <Ionicons name="information-circle-outline" size={16} color="#64748b" />
+              <Text style={styles.noteText}>
+                Wallet balance reflects any penalty deductions. Payment collection and payout tracking are coming in a future update.
+              </Text>
             </View>
-          ))}
-          <View style={{ height: 40 }} />
-        </ScrollView>
+
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        )}
       </SafeAreaView>
     </View>
   );
@@ -83,23 +138,45 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: "700", color: "#f8fafc" },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
-  balanceCard: { borderRadius: 20, padding: 24, marginBottom: 16 },
-  balanceLabel: { fontSize: 14, color: "rgba(255,255,255,0.8)", fontWeight: "500" },
-  balanceAmount: { fontSize: 36, fontWeight: "800", color: "#fff", marginTop: 8, marginBottom: 20, letterSpacing: -1 },
-  balanceRow: { flexDirection: "row", alignItems: "center" },
-  balanceStat: { flex: 1, alignItems: "center" },
-  balanceStatVal: { fontSize: 18, fontWeight: "700", color: "#fff" },
-  balanceStatLbl: { fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 2 },
-  balanceDivider: { width: 1, height: 32, backgroundColor: "rgba(255,255,255,0.2)" },
-  withdrawBtn: { borderRadius: 14, overflow: "hidden", marginBottom: 24 },
-  withdrawGradient: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 14 },
-  withdrawText: { fontSize: 16, fontWeight: "700", color: "#fff" },
-  sectionTitle: { fontSize: 17, fontWeight: "700", color: "#f1f5f9", marginBottom: 12 },
-  txCard: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(30,41,59,0.6)", borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: "#1e293b", gap: 12 },
-  txIcon: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  txBody: { flex: 1 },
-  txProject: { fontSize: 15, fontWeight: "600", color: "#f8fafc" },
-  txClient: { fontSize: 13, color: "#64748b", marginTop: 2 },
-  txAmount: { fontSize: 16, fontWeight: "700" },
-  pressed: { opacity: 0.85 },
+  centerWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  walletCard: {
+    backgroundColor: "rgba(34, 197, 94, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(34, 197, 94, 0.3)",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  walletLabel: { fontSize: 13, fontWeight: "600", color: "#86efac", textTransform: "uppercase", letterSpacing: 0.5 },
+  walletValue: { fontSize: 40, fontWeight: "800", color: "#f8fafc", marginTop: 8, letterSpacing: -1 },
+  statsRow: {
+    flexDirection: "row",
+    backgroundColor: "rgba(30, 41, 59, 0.6)",
+    borderRadius: 16,
+    paddingVertical: 20,
+    borderWidth: 1,
+    borderColor: "#1e293b",
+    marginBottom: 20,
+  },
+  statBox: { flex: 1, alignItems: "center" },
+  statValue: { fontSize: 24, fontWeight: "800", color: "#f8fafc" },
+  statLabel: { marginTop: 4, fontSize: 11, fontWeight: "600", color: "#64748b", textTransform: "uppercase" },
+  statDivider: { width: 1, backgroundColor: "#1e293b" },
+  historyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(30,41,59,0.6)",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: "#1e293b",
+    marginBottom: 20,
+  },
+  historyBtnText: { flex: 1, fontSize: 15, fontWeight: "600", color: "#f8fafc" },
+  noteBox: { flexDirection: "row", gap: 8, paddingHorizontal: 4 },
+  noteText: { flex: 1, fontSize: 12, color: "#64748b", lineHeight: 18 },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
 });

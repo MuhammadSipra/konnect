@@ -10,7 +10,12 @@
     "ios": {
       "icon": "./assets/expo.icon"
     },
+    
+  
     "android": {
+      "allowBackup": false,
+  
+
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,6 +24,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.muhammadsipra04.konnect"
+      
     },
     "web": {
       "output": "static",

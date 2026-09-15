@@ -1,19 +1,19 @@
-import { supabase } from '../lib/supabase';
-import { getCurrentProfileId, setCurrentProfile } from '../lib/currentProfile';
-import { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  StatusBar,
-  ActivityIndicator,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { getCurrentProfileId, setCurrentProfile } from '../lib/currentProfile';
+import { supabase } from '../lib/supabase';
 
 // Resolve who's logged in — memory first, otherwise fall back to the Supabase session
 async function resolveClientId(): Promise<number | null> {
@@ -115,7 +115,7 @@ export default function MyProjectsScreen() {
               <Pressable
                 key={project.id}
                 style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-                onPress={() => router.push(`/project-detail?id=${project.id}` as never)}
+                onPress={() => router.replace(`/project-detail?id=${project.id}` as never)}
               >
                 <View style={styles.cardTop}>
                   <View style={styles.categoryBadge}>

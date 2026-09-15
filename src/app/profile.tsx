@@ -102,6 +102,7 @@ export default function ProfileScreen() {
         onPress: async () => {
           await supabase.auth.signOut();
           clearCurrentProfile();
+          router.dismissAll();
           router.replace("/welcome");
         },
       },
@@ -233,7 +234,7 @@ export default function ProfileScreen() {
             <MenuRow
               icon="time-outline"
               label="History"
-              onPress={() => Alert.alert("Coming Soon", "Job history is coming soon.")}
+              onPress={() => router.push("/history" as never)}
             />
             <MenuRow
               icon="help-buoy-outline"
