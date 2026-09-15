@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+
 import {
   ActivityIndicator,
   Alert,
@@ -244,16 +244,14 @@ import { supabase } from '../lib/supabase';
       );
     };
 
-    useFocusEffect(
-      useCallback(() => {
-        const onBackPress = () => {
-          handleExitApp();
-          return true;
-        };
-        const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-        return () => subscription.remove();
-      }, [])
-    );
+    useEffect(() => {
+      const onBackPress = () => {
+        handleExitApp();
+        return true;
+      };
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, []);
     const handleInterested = async (leadId: number) => {
       if (!contractorId) return;
 

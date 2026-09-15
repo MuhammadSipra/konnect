@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+
 import {
   Alert,
   BackHandler,
@@ -57,18 +57,15 @@ export default function CustomerDashboard() {
       ]
     );
   };
-
-  useFocusEffect(
-    useCallback(() => {
-      const onBackPress = () => {
-        handleExitApp();
-        return true;
-      };
-      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => subscription.remove();
-    }, [])
-  );
-
+  useEffect(() => {
+    const onBackPress = () => {
+      handleExitApp();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, []);
+ 
   const displayList = contractors.filter((c) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
