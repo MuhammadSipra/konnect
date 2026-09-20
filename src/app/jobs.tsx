@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   Pressable,
   ScrollView,
   StatusBar,
@@ -99,6 +100,15 @@ export default function JobsScreen() {
       setLoading(false);
     };
     load();
+  }, []);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      router.replace('/contractor');
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
   }, []);
 
   const handleBottomTabPress = (tab: (typeof BOTTOM_TABS)[number]) => {

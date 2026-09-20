@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   Pressable,
   ScrollView,
   StatusBar,
@@ -120,6 +121,17 @@ export default function MessagesScreen() {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (myRole) {
+        router.replace(myRole === 'contractor' ? '/contractor' : '/customer');
+      }
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [myRole]);
 
   const filteredConversations = useMemo(() => {
     const query = search.trim().toLowerCase();

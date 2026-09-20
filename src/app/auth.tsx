@@ -1,28 +1,28 @@
-import { setPendingRole } from "../lib/pendingRole";
+import { Ionicons } from "@expo/vector-icons";
 import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import { makeRedirectUri } from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
-
-WebBrowser.maybeCompleteAuthSession();
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import * as WebBrowser from 'expo-web-browser';
 import { useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  StatusBar,
-  TextInput,
+  Alert,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { setPendingRole } from "../lib/pendingRole";
 import { supabase } from "../lib/supabase";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function AuthScreen() {
   const router = useRouter();
@@ -74,6 +74,10 @@ export default function AuthScreen() {
       options: {
         redirectTo: redirectUrl,
         skipBrowserRedirect: true,
+        queryParams: {
+          prompt: 'select_account',
+        },
+    
       },
     });
   

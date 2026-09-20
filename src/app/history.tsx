@@ -34,11 +34,21 @@ async function resolveMyIdentity(): Promise<{ id: number; role: string } | null>
   return null;
 }
 
+const RECENT_LIMIT = 7;
+const DATE_FILTERS = [
+  { key: 'all', label: 'All Time' },
+  { key: '7d', label: 'Last 7 Days' },
+  { key: '30d', label: 'Last 30 Days' },
+] as const;
+type DateFilterKey = (typeof DATE_FILTERS)[number]['key'];
+
 export default function HistoryScreen() {
   const router = useRouter();
   const [role, setRole] = useState<string | null>(null);
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAll, setShowAll] = useState(false);
+  const [dateFilter, setDateFilter] = useState<DateFilterKey>('all');
 
   useEffect(() => {
     const load = async () => {
@@ -115,6 +125,16 @@ export default function HistoryScreen() {
 
   const isContractor = role === 'contractor';
 
+  const dateFiltered = entries.filter(({ bid }) => {
+    if (dateFilter === 'all' || !bid.completed_at) return true;
+    const days = dateFilter === '7d' ? 7 : 30;
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    return new Date(bid.completed_at).getTime() >= cutoff;
+  });
+
+  const visibleEntries = showAll ? dateFiltered : dateFiltered.slice(0, RECENT_LIMIT);
+  const hasMore = !showAll && entries.length > RECENT_LIMIT;
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" />
@@ -124,7 +144,7 @@ export default function HistoryScreen() {
           <Pressable style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={22} color="#f8fafc" />
           </Pressable>
-          <Text style={styles.headerTitle}>History</Text>
+          <Text style={styles.headerTitle}>{showAll ? "Full History" : "History"}</Text>
           <View style={styles.iconBtn} />
         </View>
 
@@ -134,13 +154,29 @@ export default function HistoryScreen() {
           </View>
         ) : (
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {entries.length === 0 ? (
+            {showAll && (
+              <View style={styles.filterRow}>
+                {DATE_FILTERS.map((f) => (
+                  <Pressable
+                    key={f.key}
+                    style={[styles.filterChip, dateFilter === f.key && styles.filterChipActive]}
+                    onPress={() => setDateFilter(f.key)}
+                  >
+                    <Text style={[styles.filterChipText, dateFilter === f.key && styles.filterChipTextActive]}>
+                      {f.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            {visibleEntries.length === 0 ? (
               <View style={styles.centerWrap}>
                 <Ionicons name="time-outline" size={40} color="#475569" />
                 <Text style={styles.emptyText}>No completed projects yet.</Text>
               </View>
             ) : (
-              entries.map(({ bid, project, contractor, review }) => (
+              visibleEntries.map(({ bid, project, contractor, review }) => (
                 <View key={bid.id} style={styles.card}>
                   <View style={styles.cardTop}>
                     <Text style={styles.projectTitle}>{project?.title || 'Project'}</Text>
@@ -184,6 +220,14 @@ export default function HistoryScreen() {
                 </View>
               ))
             )}
+
+            {hasMore && (
+              <Pressable style={styles.seeFullBtn} onPress={() => setShowAll(true)}>
+                <Text style={styles.seeFullBtnText}>See Full History</Text>
+                <Ionicons name="chevron-forward" size={16} color="#22c55e" />
+              </Pressable>
+            )}
+
             <View style={{ height: 40 }} />
           </ScrollView>
         )}
@@ -202,6 +246,18 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
   centerWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingTop: 80 },
   emptyText: { fontSize: 15, color: "#64748b", fontWeight: "500" },
+  filterRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(30,41,59,0.6)",
+    borderWidth: 1,
+    borderColor: "#1e293b",
+  },
+  filterChipActive: { backgroundColor: "rgba(34,197,94,0.15)", borderColor: "#22c55e" },
+  filterChipText: { fontSize: 12, fontWeight: "600", color: "#94a3b8" },
+  filterChipTextActive: { color: "#22c55e" },
   card: { backgroundColor: "rgba(30,41,59,0.6)", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#1e293b", marginBottom: 12 },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 8 },
   projectTitle: { flex: 1, fontSize: 16, fontWeight: "700", color: "#f8fafc" },
@@ -215,5 +271,14 @@ const styles = StyleSheet.create({
   starsRow: { flexDirection: "row", gap: 2, marginBottom: 4 },
   reviewComment: { fontSize: 13, color: "#cbd5e1", lineHeight: 19 },
   noReviewText: { fontSize: 12, color: "#475569", fontStyle: "italic" },
+  seeFullBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 14,
+    marginTop: 4,
+  },
+  seeFullBtnText: { fontSize: 14, fontWeight: "700", color: "#22c55e" },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
 });

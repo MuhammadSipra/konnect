@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { setCurrentProfile } from "../lib/currentProfile";
+import { clearPendingGoogleTokens, getPendingGoogleTokens } from "../lib/pendingGoogleSession";
 import { supabase } from "../lib/supabase";
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
@@ -118,16 +119,28 @@ export default function OtpScreen() {
       }
 
       if (isGoogleMode) {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const session = sessionData?.session;
-
-        if (!session?.user) {
+        const tokens = getPendingGoogleTokens();
+        if (!tokens) {
           setVerifying(false);
           Alert.alert("Session Expired", "Please sign in with Google again.");
           router.replace('/welcome');
           return;
         }
 
+        const { data: setData, error: setError } = await supabase.auth.setSession({
+          access_token: tokens.accessToken,
+          refresh_token: tokens.refreshToken,
+        });
+        clearPendingGoogleTokens();
+
+        if (setError || !setData?.session?.user) {
+          setVerifying(false);
+          Alert.alert("Session Expired", "Please sign in with Google again.");
+          router.replace('/welcome');
+          return;
+        }
+
+        const session = setData.session;
         const authUserId = session.user.id;
 
         let existingProfile = null;
@@ -157,13 +170,14 @@ export default function OtpScreen() {
 
         if (existingProfile) {
           setCurrentProfile(existingProfile.id, existingProfile.user_type);
+          router.dismissAll();
           if (existingProfile.user_type === 'contractor' && existingProfile.verification_status !== 'approved') {
-            router.dismissAll();
             router.replace('/verification-pending');
           } else {
             router.replace(existingProfile.user_type === 'contractor' ? '/contractor' : '/customer');
           }
         } else {
+          router.dismissAll();
           router.replace({
             pathname: '/signup',
             params: {

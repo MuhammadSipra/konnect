@@ -6,7 +6,6 @@ import { useEffect, useState } from 'react';
 
 import {
   ActivityIndicator,
-  Alert,
   BackHandler,
   Image,
   Modal,
@@ -19,8 +18,10 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AppAlert } from '../lib/AppAlert';
 import { getCurrentProfileId, setCurrentProfile } from '../lib/currentProfile';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../lib/ThemeContext';
 
   const TABS = [
     { key: "home", label: "Home", icon: "home" as const, route: "/contractor" },
@@ -38,6 +39,7 @@ import { supabase } from '../lib/supabase';
 
   export default function ContractorDashboard() {
     const router = useRouter();
+    const { colors, mode } = useTheme();
     const [contractorId, setContractorId] = useState<number | null>(null);
     const [resolvingId, setResolvingId] = useState(true);
 
@@ -93,55 +95,6 @@ import { supabase } from '../lib/supabase';
       if (data) setPortfolio(data);
     };
 
-    const handleAddPortfolioPhoto = async () => {
-      if (!contractorId) return;
-
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert("Permission needed", "Please allow photo access to upload portfolio photos.");
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
-      });
-      if (result.canceled || !result.assets[0]) return;
-
-      setUploadingPhoto(true);
-
-      try {
-        const uri = result.assets[0].uri;
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        const arrayBuffer = await new Response(blob).arrayBuffer();
-        const fileExt = uri.split('.').pop() || 'jpg';
-        const fileName = `portfolio/${contractorId}_${Date.now()}.${fileExt}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('documents')
-          .upload(fileName, arrayBuffer, { contentType: blob.type || 'image/jpeg' });
-
-        if (uploadError) {
-          Alert.alert("Upload Error", uploadError.message);
-          setUploadingPhoto(false);
-          return;
-        }
-
-        const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
-
-        await supabase.from('portfolio_photos').insert({
-          contractor_id: contractorId,
-          photo_url: urlData.publicUrl,
-        });
-
-        await getPortfolio(contractorId);
-      } catch (err) {
-        Alert.alert("Error", "Could not upload photo.");
-      } finally {
-        setUploadingPhoto(false);
-      }
-    };
     const getReviews = async (id: number) => {
       const { data } = await supabase.from('reviews').select('rating').eq('contractor_id', id);
       if (data && data.length > 0) {
@@ -149,6 +102,75 @@ import { supabase } from '../lib/supabase';
         setAvgRating(avg);
         setReviewCount(data.length);
       }
+    };
+
+    const uploadPortfolioPhoto = async (uri: string) => {
+      if (!contractorId) return;
+      setUploadingPhoto(true);
+      try {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const arrayBuffer = await new Response(blob).arrayBuffer();
+        const fileExt = uri.split('.').pop() || 'jpg';
+        const fileName = `portfolio/${contractorId}_${Date.now()}.${fileExt}`;
+    
+        const { error: uploadError } = await supabase.storage
+          .from('documents')
+          .upload(fileName, arrayBuffer, { contentType: blob.type || 'image/jpeg' });
+    
+        if (uploadError) {
+          AppAlert.show("Upload Error", uploadError.message);
+          setUploadingPhoto(false);
+          return;
+        }
+    
+        const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
+    
+        await supabase.from('portfolio_photos').insert({
+          contractor_id: contractorId,
+          photo_url: urlData.publicUrl,
+        });
+    
+        await getPortfolio(contractorId);
+      } catch (err) {
+        AppAlert.show("Error", "Could not upload photo.");
+      } finally {
+        setUploadingPhoto(false);
+      }
+    };
+    
+    const handleAddPortfolioPhoto = () => {
+      if (!contractorId) return;
+      AppAlert.show("Add Photo", "Choose a source", [
+        {
+          text: "Camera",
+          onPress: async () => {
+            const permission = await ImagePicker.requestCameraPermissionsAsync();
+            if (!permission.granted) {
+              AppAlert.show("Permission needed", "Please allow camera access to take a photo.");
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+            if (!result.canceled && result.assets[0]) await uploadPortfolioPhoto(result.assets[0].uri);
+          },
+        },
+        {
+          text: "Gallery",
+          onPress: async () => {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) {
+              AppAlert.show("Permission needed", "Please allow photo access to upload portfolio photos.");
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              quality: 0.7,
+            });
+            if (!result.canceled && result.assets[0]) await uploadPortfolioPhoto(result.assets[0].uri);
+          },
+        },
+        { text: "Cancel", style: "cancel" },
+      ]);
     };
 
     const getLeads = async () => {
@@ -233,8 +255,9 @@ import { supabase } from '../lib/supabase';
       };
       init();
     }, []);
+
     const handleExitApp = () => {
-      Alert.alert(
+      AppAlert.show(
         "Exit Konnect?",
         "Are you sure you want to exit the app?",
         [
@@ -252,6 +275,7 @@ import { supabase } from '../lib/supabase';
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => subscription.remove();
     }, []);
+
     const handleInterested = async (leadId: number) => {
       if (!contractorId) return;
 
@@ -294,7 +318,7 @@ import { supabase } from '../lib/supabase';
         return;
       }
 
-      Alert.alert(
+      AppAlert.show(
         "Cancel Interest",
         "Are you sure you want to withdraw your interest? No penalty applies before confirmation.",
         [
@@ -390,16 +414,16 @@ import { supabase } from '../lib/supabase';
         .single();
 
       if (projectError || !projectData) {
-        Alert.alert("Error", "Could not verify code. Try again.");
+        AppAlert.show("Error", "Could not verify code. Try again.");
         return;
       }
 
       if (enteredCode.trim() !== projectData.confirmation_code) {
-        Alert.alert("Wrong Code", "The code you entered doesn't match. Please check with the client and try again.");
+        AppAlert.show("Wrong Code", "The code you entered doesn't match. Please check with the client and try again.");
         return;
       }
 
-      Alert.alert(
+      AppAlert.show(
         "Confirm This Job",
         "Once confirmed, cancelling later may result in a trust score and wallet penalty (unless it's your first cancellation this month). Do you want to proceed?",
         [
@@ -436,10 +460,10 @@ import { supabase } from '../lib/supabase';
 
     if (resolvingId) {
       return (
-        <View style={styles.root}>
-          <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
+        <View style={[styles.root, { backgroundColor: colors.bg }]}>
+          <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
           <SafeAreaView style={styles.centerWrap}>
-            <ActivityIndicator size="large" color="#22c55e" />
+            <ActivityIndicator size="large" color={colors.green} />
           </SafeAreaView>
         </View>
       );
@@ -447,11 +471,11 @@ import { supabase } from '../lib/supabase';
 
     if (!contractorId) {
       return (
-        <View style={styles.root}>
-          <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
+        <View style={[styles.root, { backgroundColor: colors.bg }]}>
+          <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
           <SafeAreaView style={styles.centerWrap}>
-            <Text style={styles.emptyText}>Please log in to continue</Text>
-            <Pressable style={styles.loginRedirectBtn} onPress={() => router.replace('/welcome')}>
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>Please log in to continue</Text>
+            <Pressable style={[styles.loginRedirectBtn, { backgroundColor: colors.blue }]} onPress={() => router.replace('/welcome')}>
               <Text style={styles.loginRedirectBtnText}>Go to Login</Text>
             </Pressable>
           </SafeAreaView>
@@ -460,26 +484,23 @@ import { supabase } from '../lib/supabase';
     }
 
     return (
-      <View style={styles.root}>
-        <StatusBar barStyle="light-content" />
+      <View style={[styles.root, { backgroundColor: colors.bg }]}>
+        <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
 
-        <LinearGradient
-          colors={["#0f172a", "#020617", "#0a0f1a"]}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={styles.glowGreen} />
-        <View style={styles.glowBlue} />
+        <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
+        <View style={[styles.glowGreen, { backgroundColor: colors.glowGreenBg }]} />
+        <View style={[styles.glowBlue, { backgroundColor: colors.glowBlueBg }]} />
 
         <SafeAreaView style={styles.safe} edges={["top"]}>
           {/* Header */}
           <View style={styles.header}>
           <Pressable
-  style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+  style={({ pressed }) => [styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
   onPress={handleExitApp}
 >
-              <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
             </Pressable>
-            <Text style={styles.headerTitle}>Contractor Dashboard</Text>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Contractor Dashboard</Text>
             <View style={styles.headerSpacer} />
           </View>
 
@@ -489,12 +510,12 @@ import { supabase } from '../lib/supabase';
             showsVerticalScrollIndicator={false}
           >
             {/* Profile */}
-            <View style={styles.profileCard}>
+            <View style={[styles.profileCard, { borderColor: colors.border }]}>
               <LinearGradient
-                colors={["#1e293b", "#0f172a"]}
+                colors={colors.cardGradient}
                 style={styles.profileGradient}
               >
-               <View style={styles.avatar}>
+               <View style={[styles.avatar, { backgroundColor: colors.green }]}>
   {profile?.profile_photo_url ? (
     <Image source={{ uri: profile.profile_photo_url }} style={styles.avatarImage} />
   ) : (
@@ -506,32 +527,36 @@ import { supabase } from '../lib/supabase';
   )}
 </View>
                 <View style={styles.profileInfo}>
-                  <Text style={styles.profileName}>{profile?.name || 'Loading...'}</Text>
-                  <Text style={styles.profileSkill}>{profile?.skill || ''}</Text>
+                  <Text style={[styles.profileName, { color: colors.textPrimary }]}>{profile?.name || 'Loading...'}</Text>
+                  <Text style={[styles.profileSkill, { color: colors.textSecondary }]}>{profile?.skill || ''}</Text>
                   <View style={styles.ratingRow}>
-  <Ionicons name="star" size={16} color="#fbbf24" />
-  <Text style={styles.ratingText}>{avgRating > 0 ? avgRating.toFixed(1) : 'New'}</Text>
-  <Text style={styles.ratingCount}>({reviewCount} reviews)</Text>
+  <Ionicons name="star" size={16} color={colors.gold} />
+  <Text style={[styles.ratingText, { color: colors.gold }]}>{avgRating > 0 ? avgRating.toFixed(1) : 'New'}</Text>
+  <Text style={[styles.ratingCount, { color: colors.textMuted }]}>({reviewCount} reviews)</Text>
 </View>
                 </View>
               </LinearGradient>
             </View>
 
             {/* Portfolio */}
-<SectionHeader title="Portfolio" action="" />
+            <SectionHeader
+  title="Portfolio"
+  action={portfolio.length > 0 ? "View All" : ""}
+  onAction={() => router.push('/portfolio-all' as never)}
+/>
 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
-  <Pressable style={styles.addPhotoBtn} onPress={handleAddPortfolioPhoto} disabled={uploadingPhoto}>
+  <Pressable style={[styles.addPhotoBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={handleAddPortfolioPhoto} disabled={uploadingPhoto}>
     {uploadingPhoto ? (
-      <ActivityIndicator color="#22c55e" />
+      <ActivityIndicator color={colors.green} />
     ) : (
       <>
-        <Ionicons name="camera-outline" size={24} color="#64748b" />
-        <Text style={styles.addPhotoText}>Add Photo</Text>
+        <Ionicons name="camera-outline" size={24} color={colors.textMuted} />
+        <Text style={[styles.addPhotoText, { color: colors.textMuted }]}>Add Photo</Text>
       </>
     )}
   </Pressable>
-  {portfolio.map((item: any) => (
-    <Image key={item.id} source={{ uri: item.photo_url }} style={styles.portfolioThumb} />
+  {portfolio.slice(0, 3).map((item: any) => (
+    <Image key={item.id} source={{ uri: item.photo_url }} style={[styles.portfolioThumb, { backgroundColor: colors.surfaceSolid }]} />
   ))}
 </ScrollView>
 
@@ -570,7 +595,7 @@ import { supabase } from '../lib/supabase';
           </ScrollView>
 
           {/* Bottom Tab Bar */}
-          <View style={styles.tabBarWrap}>
+          <View style={[styles.tabBarWrap, { backgroundColor: colors.surfaceSolid, borderTopColor: colors.border }]}>
             <SafeAreaView edges={["bottom"]}>
               <View style={styles.tabBar}>
                 {TABS.map((tab) => {
@@ -587,9 +612,9 @@ import { supabase } from '../lib/supabase';
                       <Ionicons
                         name={active ? tab.icon : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)}
                         size={22}
-                        color={active ? "#22c55e" : "#64748b"}
+                        color={active ? colors.green : colors.textMuted}
                       />
-                      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                      <Text style={[styles.tabLabel, { color: active ? colors.green : colors.textMuted }]}>
                         {tab.label}
                       </Text>
                     </Pressable>
@@ -603,21 +628,21 @@ import { supabase } from '../lib/supabase';
         {/* Cancellation reason picker — shown for CONFIRMED bids only */}
         <Modal visible={cancelReasonLeadId !== null} transparent animationType="fade">
           <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Why are you cancelling?</Text>
+            <View style={[styles.modalCard, { backgroundColor: colors.surfaceSolid, borderColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Why are you cancelling?</Text>
               <View style={{ marginTop: 16, gap: 10 }}>
                 {CONTRACTOR_CANCEL_REASONS.map((reason) => (
                   <Pressable
                     key={reason}
-                    style={styles.reasonOption}
+                    style={[styles.reasonOption, { backgroundColor: colors.surface, borderColor: colors.border }]}
                     onPress={() => submitContractorCancellation(reason)}
                   >
-                    <Text style={styles.reasonOptionText}>{reason}</Text>
+                    <Text style={[styles.reasonOptionText, { color: colors.textPrimary }]}>{reason}</Text>
                   </Pressable>
                 ))}
               </View>
               <Pressable style={styles.modalDismissBtn} onPress={() => setCancelReasonLeadId(null)}>
-                <Text style={styles.modalDismissBtnText}>Never mind</Text>
+                <Text style={[styles.modalDismissBtnText, { color: colors.textMuted }]}>Never mind</Text>
               </Pressable>
             </View>
           </View>
@@ -626,12 +651,13 @@ import { supabase } from '../lib/supabase';
     );
   }
 
-  function SectionHeader({ title, action }: { title: string; action: string }) {
+  function SectionHeader({ title, action, onAction }: { title: string; action: string; onAction?: () => void }) {
+    const { colors } = useTheme();
     return (
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        <Pressable>
-          <Text style={styles.sectionAction}>{action}</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{title}</Text>
+        <Pressable onPress={onAction}>
+          <Text style={[styles.sectionAction, { color: colors.green }]}>{action}</Text>
         </Pressable>
       </View>
     );
@@ -647,20 +673,21 @@ import { supabase } from '../lib/supabase';
     onCancel: () => void;
   }) {
     const router = useRouter();
+    const { colors } = useTheme();
     return (
-      <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+      <Pressable style={({ pressed }) => [styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}>
         <View style={styles.cardTop}>
-          <Text style={styles.cardTitle}>{job.title}</Text>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>Active</Text>
+          <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{job.title}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: colors.green + '26', borderColor: colors.green + '59' }]}>
+            <Text style={[styles.statusText, { color: colors.green }]}>Active</Text>
           </View>
         </View>
         <View style={styles.cardRow}>
-          <Ionicons name="location-outline" size={14} color="#64748b" />
-          <Text style={styles.cardDetail}>{job.location}</Text>
+          <Ionicons name="location-outline" size={14} color={colors.textMuted} />
+          <Text style={[styles.cardDetail, { color: colors.textMuted }]}>{job.location}</Text>
         </View>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={styles.cardBudget}>{job.budget}</Text>
+          <Text style={[styles.cardBudget, { color: colors.green }]}>{job.budget}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
             <Pressable
               style={styles.messageBtn}
@@ -670,11 +697,11 @@ import { supabase } from '../lib/supabase';
                 )
               }
             >
-              <Ionicons name="chatbubble-outline" size={13} color="#3b82f6" />
-              <Text style={styles.messageBtnText}>Message</Text>
+              <Ionicons name="chatbubble-outline" size={13} color={colors.blue} />
+              <Text style={[styles.messageBtnText, { color: colors.blue }]}>Message</Text>
             </Pressable>
             <Pressable onPress={onCancel}>
-              <Text style={styles.cancelLink}>Cancel</Text>
+              <Text style={[styles.cancelLink, { color: colors.red }]}>Cancel</Text>
             </Pressable>
           </View>
         </View>
@@ -700,6 +727,7 @@ import { supabase } from '../lib/supabase';
     onConfirmCode: (code: string) => void;
   }) {
     const router = useRouter();
+    const { colors } = useTheme();
     const [codeInput, setCodeInput] = useState("");
     const isTargeted = lead.target_contractor_id === contractorId;
     const isLocked = bidStatus === 'locked';
@@ -713,27 +741,35 @@ import { supabase } from '../lib/supabase';
     const wasClientCancelled = isPending && cancelInfo?.cancelled_by === 'client';
 
     return (
-      <Pressable style={({ pressed }) => [styles.card, styles.leadCard, isTargeted && styles.leadCardTargeted, pressed && styles.pressed]}>
-        <View style={[styles.leadAccent, isTargeted && styles.leadAccentTargeted]} />
+      <Pressable
+        style={({ pressed }) => [
+          styles.card,
+          styles.leadCard,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+          isTargeted && { borderColor: colors.gold + '59', backgroundColor: colors.gold + '0A' },
+          pressed && styles.pressed,
+        ]}
+      >
+        <View style={[styles.leadAccent, { backgroundColor: isTargeted ? colors.gold : colors.blue }]} />
         <View style={styles.leadContent}>
           {isTargeted && (
             <View style={styles.targetedBadge}>
-              <Ionicons name="star" size={10} color="#fbbf24" />
-              <Text style={styles.targetedBadgeText}>Sent to you directly</Text>
+              <Ionicons name="star" size={10} color={colors.gold} />
+              <Text style={[styles.targetedBadgeText, { color: colors.gold }]}>Sent to you directly</Text>
             </View>
           )}
           <View style={styles.cardTop}>
-            <Text style={styles.cardTitle}>{lead.title}</Text>
-            <Text style={styles.leadTime}>{new Date(lead.created_at).toLocaleDateString()}</Text>
+            <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{lead.title}</Text>
+            <Text style={[styles.leadTime, { color: colors.textMuted }]}>{new Date(lead.created_at).toLocaleDateString()}</Text>
           </View>
           <View style={styles.cardRow}>
-            <Ionicons name="location-outline" size={14} color="#64748b" />
-            <Text style={styles.cardDetail}>{lead.location}</Text>
+            <Ionicons name="location-outline" size={14} color={colors.textMuted} />
+            <Text style={[styles.cardDetail, { color: colors.textMuted }]}>{lead.location}</Text>
           </View>
 
           {isLocked && (
-  <View style={styles.codeEntryWrap}>
-    <Text style={styles.codeEntryLabel}>
+  <View style={[styles.codeEntryWrap, { backgroundColor: colors.gold + '14', borderColor: colors.gold + '40' }]}>
+    <Text style={[styles.codeEntryLabel, { color: colors.gold }]}>
       Client shortlisted you! Message them to discuss, then enter the code they share:
     </Text>
     <Pressable
@@ -744,20 +780,20 @@ import { supabase } from '../lib/supabase';
         )
       }
     >
-      <Ionicons name="chatbubble-outline" size={13} color="#3b82f6" />
-      <Text style={styles.messageBtnText}>Message Client</Text>
+      <Ionicons name="chatbubble-outline" size={13} color={colors.blue} />
+      <Text style={[styles.messageBtnText, { color: colors.blue }]}>Message Client</Text>
     </Pressable>
     <View style={styles.codeEntryRow}>
       <TextInput
-        style={styles.codeInput}
+        style={[styles.codeInput, { backgroundColor: colors.surfaceSolid, borderColor: colors.border, color: colors.textPrimary }]}
         placeholder="4-digit code"
-        placeholderTextColor="#64748b"
+        placeholderTextColor={colors.textMuted}
         value={codeInput}
         onChangeText={setCodeInput}
         keyboardType="number-pad"
         maxLength={4}
       />
-      <Pressable style={styles.codeSubmitBtn} onPress={() => onConfirmCode(codeInput)}>
+      <Pressable style={[styles.codeSubmitBtn, { backgroundColor: colors.blue }]} onPress={() => onConfirmCode(codeInput)}>
         <Text style={styles.codeSubmitText}>Confirm</Text>
       </Pressable>
     </View>
@@ -765,15 +801,15 @@ import { supabase } from '../lib/supabase';
 )}
 
           <View style={styles.leadFooter}>
-            <Text style={styles.cardBudget}>{lead.budget}</Text>
+            <Text style={[styles.cardBudget, { color: colors.green }]}>{lead.budget}</Text>
 
             {isConfirmed ? (
               <View style={{ alignItems: "flex-end", gap: 4 }}>
-                <View style={styles.confirmedBadge}>
-                  <Text style={styles.confirmedBadgeText}>Confirmed</Text>
+                <View style={[styles.confirmedBadge, { backgroundColor: colors.green + '26', borderColor: colors.green + '59' }]}>
+                  <Text style={[styles.confirmedBadgeText, { color: colors.green }]}>Confirmed</Text>
                 </View>
                 <Pressable onPress={onCancel}>
-                  <Text style={styles.cancelLink}>Cancel</Text>
+                  <Text style={[styles.cancelLink, { color: colors.red }]}>Cancel</Text>
                 </Pressable>
               </View>
             ) : isLocked ? null : isPending ? (
@@ -788,24 +824,24 @@ import { supabase } from '../lib/supabase';
                     </Text>
                   </>
                 ) : (
-                  <View style={styles.pendingBadge}>
-                    <Text style={styles.pendingBadgeText}>Pending</Text>
+                  <View style={[styles.pendingBadge, { backgroundColor: colors.gold + '26', borderColor: colors.gold + '59' }]}>
+                    <Text style={[styles.pendingBadgeText, { color: colors.gold }]}>Pending</Text>
                   </View>
                 )}
                 <Pressable onPress={onCancel}>
-                  <Text style={styles.cancelLink}>Cancel</Text>
+                  <Text style={[styles.cancelLink, { color: colors.red }]}>Cancel</Text>
                 </Pressable>
               </View>
             ) : isCancelled ? (
-              <View style={styles.cancelledBadge}>
-                <Text style={styles.cancelledBadgeText}>Cancelled</Text>
+              <View style={[styles.cancelledBadge, { backgroundColor: colors.red + '26', borderColor: colors.red + '59' }]}>
+                <Text style={[styles.cancelledBadgeText, { color: colors.red }]}>Cancelled</Text>
               </View>
             ) : isNotSelected ? (
-              <View style={styles.cancelledBadge}>
-                <Text style={styles.cancelledBadgeText}>Went to another contractor</Text>
+              <View style={[styles.cancelledBadge, { backgroundColor: colors.red + '26', borderColor: colors.red + '59' }]}>
+                <Text style={[styles.cancelledBadgeText, { color: colors.red }]}>Went to another contractor</Text>
               </View>
             ) : (
-              <Pressable style={styles.interestBtn} onPress={onInterested}>
+              <Pressable style={[styles.interestBtn, { backgroundColor: colors.blueDark }]} onPress={onInterested}>
                 <Text style={styles.interestBtnText}>I'm Interested</Text>
               </Pressable>
             )}
@@ -818,7 +854,6 @@ import { supabase } from '../lib/supabase';
   const styles = StyleSheet.create({
     root: {
       flex: 1,
-      backgroundColor: "#020617",
     },
     glowGreen: {
       position: "absolute",
@@ -827,7 +862,6 @@ import { supabase } from '../lib/supabase';
       width: 220,
       height: 220,
       borderRadius: 110,
-      backgroundColor: "rgba(34, 197, 94, 0.1)",
     },
     glowBlue: {
       position: "absolute",
@@ -836,7 +870,6 @@ import { supabase } from '../lib/supabase';
       width: 260,
       height: 260,
       borderRadius: 130,
-      backgroundColor: "rgba(59, 130, 246, 0.08)",
     },
     safe: {
       flex: 1,
@@ -849,11 +882,9 @@ import { supabase } from '../lib/supabase';
     },
     emptyText: {
       fontSize: 15,
-      color: "#64748b",
       fontWeight: "500",
     },
     loginRedirectBtn: {
-      backgroundColor: "#3b82f6",
       paddingHorizontal: 20,
       paddingVertical: 12,
       borderRadius: 12,
@@ -874,16 +905,13 @@ import { supabase } from '../lib/supabase';
       width: 40,
       height: 40,
       borderRadius: 12,
-      backgroundColor: "rgba(30, 41, 59, 0.8)",
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
-      borderColor: "#1e293b",
     },
     headerTitle: {
       fontSize: 18,
       fontWeight: "700",
-      color: "#f8fafc",
       letterSpacing: -0.3,
     },
     headerSpacer: {
@@ -901,7 +929,6 @@ import { supabase } from '../lib/supabase';
       overflow: "hidden",
       marginBottom: 28,
       borderWidth: 1,
-      borderColor: "#1e293b",
     },
     profileGradient: {
       flexDirection: "row",
@@ -913,7 +940,6 @@ import { supabase } from '../lib/supabase';
       width: 64,
       height: 64,
       borderRadius: 32,
-      backgroundColor: "#22c55e",
       alignItems: "center",
       justifyContent: "center",
     },
@@ -929,13 +955,11 @@ import { supabase } from '../lib/supabase';
     profileName: {
       fontSize: 22,
       fontWeight: "700",
-      color: "#f8fafc",
       letterSpacing: -0.3,
     },
     profileSkill: {
       marginTop: 4,
       fontSize: 14,
-      color: "#94a3b8",
       fontWeight: "500",
     },
     ratingRow: {
@@ -947,11 +971,9 @@ import { supabase } from '../lib/supabase';
     ratingText: {
       fontSize: 15,
       fontWeight: "700",
-      color: "#fbbf24",
     },
     ratingCount: {
       fontSize: 13,
-      color: "#64748b",
       marginLeft: 4,
     },
     sectionHeader: {
@@ -964,19 +986,10 @@ import { supabase } from '../lib/supabase';
     sectionTitle: {
       fontSize: 17,
       fontWeight: "700",
-      color: "#f1f5f9",
     },
     sectionAction: {
       fontSize: 14,
       fontWeight: "600",
-      color: "#22c55e",
-    },
-    leadAccentTargeted: {
-      backgroundColor: "#fbbf24",
-    },
-    leadCardTargeted: {
-      borderColor: "rgba(251, 191, 36, 0.35)",
-      backgroundColor: "rgba(251, 191, 36, 0.04)",
     },
     targetedBadge: {
       flexDirection: "row",
@@ -987,7 +1000,6 @@ import { supabase } from '../lib/supabase';
     targetedBadgeText: {
       fontSize: 10,
       fontWeight: "700",
-      color: "#fbbf24",
       textTransform: "uppercase",
       letterSpacing: 0.4,
     },
@@ -995,9 +1007,7 @@ import { supabase } from '../lib/supabase';
       width: 90,
       height: 90,
       borderRadius: 14,
-      backgroundColor: "rgba(30, 41, 59, 0.5)",
       borderWidth: 1,
-      borderColor: "#1e293b",
       borderStyle: "dashed",
       alignItems: "center",
       justifyContent: "center",
@@ -1005,7 +1015,6 @@ import { supabase } from '../lib/supabase';
     },
     addPhotoText: {
       fontSize: 11,
-      color: "#64748b",
       marginTop: 4,
       fontWeight: "500",
     },
@@ -1014,15 +1023,12 @@ import { supabase } from '../lib/supabase';
       height: 90,
       borderRadius: 14,
       marginRight: 10,
-      backgroundColor: "#1e293b",
     },
     card: {
-      backgroundColor: "rgba(30, 41, 59, 0.6)",
       borderRadius: 16,
       padding: 16,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: "#1e293b",
     },
     leadCard: {
       flexDirection: "row",
@@ -1031,7 +1037,6 @@ import { supabase } from '../lib/supabase';
     },
     leadAccent: {
       width: 4,
-      backgroundColor: "#3b82f6",
     },
     leadContent: {
       flex: 1,
@@ -1047,20 +1052,16 @@ import { supabase } from '../lib/supabase';
       flex: 1,
       fontSize: 16,
       fontWeight: "700",
-      color: "#f8fafc",
     },
     statusBadge: {
-      backgroundColor: "rgba(34, 197, 94, 0.15)",
       paddingHorizontal: 10,
       paddingVertical: 4,
       borderRadius: 999,
       borderWidth: 1,
-      borderColor: "rgba(34, 197, 94, 0.35)",
     },
     statusText: {
       fontSize: 11,
       fontWeight: "700",
-      color: "#22c55e",
       textTransform: "uppercase",
     },
     cardRow: {
@@ -1071,17 +1072,14 @@ import { supabase } from '../lib/supabase';
     },
     cardDetail: {
       fontSize: 13,
-      color: "#64748b",
     },
     cardBudget: {
       marginTop: 10,
       fontSize: 16,
       fontWeight: "700",
-      color: "#22c55e",
     },
     leadTime: {
       fontSize: 12,
-      color: "#64748b",
       fontWeight: "500",
     },
     leadFooter: {
@@ -1091,7 +1089,6 @@ import { supabase } from '../lib/supabase';
       marginTop: 12,
     },
     interestBtn: {
-      backgroundColor: "#2563eb",
       paddingHorizontal: 14,
       paddingVertical: 8,
       borderRadius: 10,
@@ -1102,17 +1099,14 @@ import { supabase } from '../lib/supabase';
       color: "#ffffff",
     },
     pendingBadge: {
-      backgroundColor: "rgba(251, 191, 36, 0.15)",
       paddingHorizontal: 14,
       paddingVertical: 8,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: "rgba(251, 191, 36, 0.35)",
     },
     pendingBadgeText: {
       fontSize: 13,
       fontWeight: "700",
-      color: "#fbbf24",
     },
     warningBadge: {
       backgroundColor: "rgba(249, 115, 22, 0.15)",
@@ -1134,34 +1128,27 @@ import { supabase } from '../lib/supabase';
       fontWeight: "500",
     },
     confirmedBadge: {
-      backgroundColor: "rgba(34, 197, 94, 0.15)",
       paddingHorizontal: 14,
       paddingVertical: 8,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: "rgba(34, 197, 94, 0.35)",
     },
     confirmedBadgeText: {
       fontSize: 13,
       fontWeight: "700",
-      color: "#22c55e",
     },
     cancelledBadge: {
-      backgroundColor: "rgba(239, 68, 68, 0.15)",
       paddingHorizontal: 14,
       paddingVertical: 8,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: "rgba(239, 68, 68, 0.35)",
     },
     cancelledBadgeText: {
       fontSize: 12,
       fontWeight: "700",
-      color: "#ef4444",
     },
     cancelLink: {
       fontSize: 11,
-      color: "#ef4444",
       fontWeight: "600",
     },
     messageBtn: {
@@ -1174,19 +1161,15 @@ import { supabase } from '../lib/supabase';
     messageBtnText: {
       fontSize: 12,
       fontWeight: "600",
-      color: "#3b82f6",
     },
     codeEntryWrap: {
       marginTop: 12,
-      backgroundColor: "rgba(251, 191, 36, 0.08)",
       borderWidth: 1,
-      borderColor: "rgba(251, 191, 36, 0.25)",
       borderRadius: 12,
       padding: 12,
     },
     codeEntryLabel: {
       fontSize: 12,
-      color: "#fbbf24",
       fontWeight: "600",
       marginBottom: 8,
     },
@@ -1196,17 +1179,13 @@ import { supabase } from '../lib/supabase';
     },
     codeInput: {
       flex: 1,
-      backgroundColor: "rgba(15, 23, 42, 0.8)",
       borderRadius: 8,
       paddingHorizontal: 12,
       paddingVertical: 8,
       fontSize: 14,
-      color: "#f8fafc",
       borderWidth: 1,
-      borderColor: "#1e293b",
     },
     codeSubmitBtn: {
-      backgroundColor: "#2563eb",
       paddingHorizontal: 14,
       justifyContent: "center",
       borderRadius: 8,
@@ -1225,9 +1204,7 @@ import { supabase } from '../lib/supabase';
       bottom: 0,
       left: 0,
       right: 0,
-      backgroundColor: "rgba(15, 23, 42, 0.95)",
       borderTopWidth: 1,
-      borderTopColor: "#1e293b",
     },
     tabBar: {
       flexDirection: "row",
@@ -1242,11 +1219,8 @@ import { supabase } from '../lib/supabase';
     tabLabel: {
       fontSize: 11,
       fontWeight: "600",
-      color: "#64748b",
     },
-    tabLabelActive: {
-      color: "#22c55e",
-    },
+    tabLabelActive: {},
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.7)",
@@ -1256,30 +1230,24 @@ import { supabase } from '../lib/supabase';
     },
     modalCard: {
       width: "100%",
-      backgroundColor: "#0f172a",
       borderRadius: 20,
       padding: 24,
       borderWidth: 1,
-      borderColor: "#1e293b",
     },
     modalTitle: {
       fontSize: 18,
       fontWeight: "700",
-      color: "#f8fafc",
       textAlign: "center",
     },
     reasonOption: {
       paddingVertical: 14,
       paddingHorizontal: 16,
       borderRadius: 12,
-      backgroundColor: "rgba(30,41,59,0.7)",
       borderWidth: 1,
-      borderColor: "#1e293b",
     },
     reasonOptionText: {
       fontSize: 14,
       fontWeight: "600",
-      color: "#f8fafc",
     },
     modalDismissBtn: {
       marginTop: 16,
@@ -1289,6 +1257,5 @@ import { supabase } from '../lib/supabase';
     modalDismissBtnText: {
       fontSize: 14,
       fontWeight: "600",
-      color: "#64748b",
     },
   });

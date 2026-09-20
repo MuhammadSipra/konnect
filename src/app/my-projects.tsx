@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   Pressable,
   ScrollView,
   StatusBar,
@@ -14,6 +15,29 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getCurrentProfileId, setCurrentProfile } from '../lib/currentProfile';
 import { supabase } from '../lib/supabase';
+
+const BOTTOM_TABS = [
+  { key: "home", label: "Home", icon: "home" as const, route: "/customer" },
+  { key: "projects", label: "My Projects", icon: "folder" as const, route: "/my-projects" },
+  { key: "messages", label: "Messages", icon: "chatbubbles" as const, route: "/messages" },
+  { key: "profile", label: "Profile", icon: "person" as const, route: "/profile" },
+];
+
+type ProjectStatusKey = 'open' | 'reviewing' | 'shortlisted' | 'progress';
+
+const STATUS_META: Record<ProjectStatusKey, { label: string; color: string; bg: string; border: string }> = {
+  open: { label: "Open — Awaiting Bids", color: "#94a3b8", bg: "rgba(148, 163, 184, 0.12)", border: "rgba(148, 163, 184, 0.3)" },
+  reviewing: { label: "Reviewing Bids", color: "#fbbf24", bg: "rgba(251, 191, 36, 0.12)", border: "rgba(251, 191, 36, 0.3)" },
+  shortlisted: { label: "Contractor Shortlisted", color: "#3b82f6", bg: "rgba(59, 130, 246, 0.12)", border: "rgba(59, 130, 246, 0.3)" },
+  progress: { label: "In Progress", color: "#22c55e", bg: "rgba(34, 197, 94, 0.12)", border: "rgba(34, 197, 94, 0.3)" },
+};
+
+function getProjectStatus(bidStatuses: string[]): ProjectStatusKey {
+  if (bidStatuses.includes('confirmed') || bidStatuses.includes('accepted')) return 'progress';
+  if (bidStatuses.includes('locked')) return 'shortlisted';
+  if (bidStatuses.includes('pending')) return 'reviewing';
+  return 'open';
+}
 
 // Resolve who's logged in — memory first, otherwise fall back to the Supabase session
 async function resolveClientId(): Promise<number | null> {
@@ -61,11 +85,51 @@ export default function MyProjectsScreen() {
         .order('created_at', { ascending: false });
 
       console.log('MY PROJECTS:', data, 'ERROR:', error);
-      if (data) setProjects(data);
+
+      if (data && data.length > 0) {
+        const projectIds = data.map((p) => p.id);
+        const { data: bidsData } = await supabase
+          .from('bids')
+          .select('project_id, status')
+          .in('project_id', projectIds);
+
+        const statusMap: Record<number, string[]> = {};
+        (bidsData || []).forEach((b) => {
+          if (!statusMap[b.project_id]) statusMap[b.project_id] = [];
+          statusMap[b.project_id].push(b.status);
+        });
+
+        // Completed projects live in History, not here.
+        const active = data.filter((p) => !(statusMap[p.id] || []).includes('completed'));
+
+        const withStatus = active.map((p) => ({
+          ...p,
+          projectStatus: getProjectStatus(statusMap[p.id] || []),
+        }));
+
+        setProjects(withStatus);
+      } else {
+        setProjects([]);
+      }
+
       setLoading(false);
     };
     getMyProjects();
   }, []);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      router.replace('/customer');
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, []);
+
+  const handleBottomTabPress = (tab: (typeof BOTTOM_TABS)[number]) => {
+    if (tab.key === "projects") return;
+    router.replace(tab.route as never);
+  };
 
   return (
     <View style={styles.root}>
@@ -79,16 +143,8 @@ export default function MyProjectsScreen() {
       <View style={styles.glowGreen} />
 
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        {/* Header */}
         <View style={styles.header}>
-          <Pressable
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
-          </Pressable>
           <Text style={styles.headerTitle}>My Projects</Text>
-          <View style={styles.headerSpacer} />
         </View>
 
         {loading ? (
@@ -111,46 +167,81 @@ export default function MyProjectsScreen() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {projects.map((project) => (
-              <Pressable
-                key={project.id}
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-                onPress={() => router.replace(`/project-detail?id=${project.id}` as never)}
-              >
-                <View style={styles.cardTop}>
-                  <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{project.category}</Text>
+            {projects.map((project) => {
+              const meta = STATUS_META[project.projectStatus as ProjectStatusKey];
+              return (
+                <Pressable
+                  key={project.id}
+                  style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                  onPress={() => router.push(`/project-detail?id=${project.id}` as never)}
+                >
+                  <View style={styles.cardTop}>
+                    <View style={styles.categoryBadge}>
+                      <Text style={styles.categoryText}>{project.category}</Text>
+                    </View>
+                    <Text style={styles.postedTime}>
+                      {new Date(project.created_at).toLocaleDateString()}
+                    </Text>
                   </View>
-                  <Text style={styles.postedTime}>
-                    {new Date(project.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
 
-                <Text style={styles.cardTitle}>{project.title}</Text>
+                  <Text style={styles.cardTitle}>{project.title}</Text>
 
-                {project.confirmation_code ? (
-                  <View style={styles.codeBox}>
-                    <Ionicons name="key-outline" size={14} color="#fbbf24" />
-                    <Text style={styles.codeText}>Confirmation Code: {project.confirmation_code}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: meta.bg, borderColor: meta.border }]}>
+                    <View style={[styles.statusDot, { backgroundColor: meta.color }]} />
+                    <Text style={[styles.statusBadgeText, { color: meta.color }]}>{meta.label}</Text>
                   </View>
-                ) : null}
 
-                <View style={styles.infoRow}>
-                  <Ionicons name="location-outline" size={14} color="#64748b" />
-                  <Text style={styles.infoText}>{project.location}</Text>
-                </View>
+                  {project.confirmation_code ? (
+                    <View style={styles.codeBox}>
+                      <Ionicons name="key-outline" size={14} color="#fbbf24" />
+                      <Text style={styles.codeText}>Confirmation Code: {project.confirmation_code}</Text>
+                    </View>
+                  ) : null}
 
-                <View style={styles.infoRow}>
-                  <Ionicons name="time-outline" size={14} color="#64748b" />
-                  <Text style={styles.infoText}>{project.timeline}</Text>
-                </View>
+                  <View style={styles.infoRow}>
+                    <Ionicons name="location-outline" size={14} color="#64748b" />
+                    <Text style={styles.infoText}>{project.location}</Text>
+                  </View>
 
-                <Text style={styles.cardBudget}>{project.budget}</Text>
-              </Pressable>
-            ))}
-            <View style={{ height: 40 }} />
+                  <View style={styles.infoRow}>
+                    <Ionicons name="time-outline" size={14} color="#64748b" />
+                    <Text style={styles.infoText}>{project.timeline}</Text>
+                  </View>
+
+                  <Text style={styles.cardBudget}>{project.budget}</Text>
+                </Pressable>
+              );
+            })}
+            <View style={{ height: 100 }} />
           </ScrollView>
         )}
+
+        {/* Bottom Tab Bar */}
+        <View style={styles.tabBarWrap}>
+          <SafeAreaView edges={["bottom"]}>
+            <View style={styles.tabBar}>
+              {BOTTOM_TABS.map((tab) => {
+                const active = tab.key === "projects";
+                return (
+                  <Pressable
+                    key={tab.key}
+                    style={styles.tabItem}
+                    onPress={() => handleBottomTabPress(tab)}
+                  >
+                    <Ionicons
+                      name={active ? tab.icon : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)}
+                      size={22}
+                      color={active ? "#22c55e" : "#64748b"}
+                    />
+                    <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                      {tab.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </SafeAreaView>
+        </View>
       </SafeAreaView>
     </View>
   );
@@ -183,30 +274,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 12,
   },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "rgba(30, 41, 59, 0.8)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 28,
+    fontWeight: "800",
     color: "#f8fafc",
-    letterSpacing: -0.3,
-  },
-  headerSpacer: {
-    width: 40,
+    letterSpacing: -0.5,
   },
   centerWrap: {
     flex: 1,
@@ -263,6 +338,26 @@ const styles = StyleSheet.create({
     color: "#f8fafc",
     marginBottom: 10,
   },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
   codeBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -300,5 +395,32 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
     transform: [{ scale: 0.98 }],
+  },
+  tabBarWrap: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(15, 23, 42, 0.95)",
+    borderTopWidth: 1,
+    borderTopColor: "#1e293b",
+  },
+  tabBar: {
+    flexDirection: "row",
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748b",
+  },
+  tabLabelActive: {
+    color: "#22c55e",
   },
 });

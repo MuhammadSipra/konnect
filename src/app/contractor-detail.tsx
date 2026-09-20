@@ -168,53 +168,67 @@ export default function ContractorDetailScreen() {
             </View>
           </View>
 
-          <Text style={styles.sectionTitle}>Portfolio</Text>
-          {portfolio.length === 0 ? (
-            <View style={styles.card}>
-              <Text style={styles.bio}>No portfolio photos yet.</Text>
-            </View>
-          ) : (
-            <View style={styles.portfolioGrid}>
-  {portfolio.map((item) => (
-    <Image
-      key={item.id}
-      source={{ uri: item.photo_url }}
-      style={[styles.portfolioItem, { width: PORTFOLIO_ITEM_SIZE, height: PORTFOLIO_ITEM_SIZE }]}
-    />
-  ))}
+          <View style={styles.sectionHeaderRow}>
+  <Text style={styles.sectionTitle}>Portfolio</Text>
+  {portfolio.length > 2 && (
+    <Pressable onPress={() => router.push(`/portfolio-all?contractorId=${id}` as never)}>
+      <Text style={styles.viewAllLink}>View All</Text>
+    </Pressable>
+  )}
 </View>
-          )}
+{portfolio.length === 0 ? (
+  <View style={styles.card}>
+    <Text style={styles.bio}>No portfolio photos yet.</Text>
+  </View>
+) : (
+  <View style={styles.portfolioGrid}>
+    {portfolio.slice(0, 2).map((item) => (
+      <Image
+        key={item.id}
+        source={{ uri: item.photo_url }}
+        style={[styles.portfolioItem, { width: PORTFOLIO_ITEM_SIZE, height: PORTFOLIO_ITEM_SIZE }]}
+      />
+    ))}
+  </View>
+)}
 
-          <Text style={styles.sectionTitle}>Reviews</Text>
-          {reviews.length === 0 ? (
-            <View style={styles.card}>
-              <Text style={styles.bio}>No reviews yet.</Text>
-            </View>
-          ) : (
-            reviews.map((r) => (
-              <View key={r.id} style={styles.reviewCard}>
-                <View style={styles.reviewHeader}>
-                  <View style={styles.reviewAvatar}>
-                    <Text style={styles.reviewAvatarText}>
-                      {r.clientName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                    </Text>
-                  </View>
-                  <View style={styles.reviewMeta}>
-                    <Text style={styles.reviewName}>{r.clientName}</Text>
-                    <View style={styles.starsRow}>
-                      {Array.from({ length: r.rating }).map((_, i) => (
-                        <Ionicons key={i} name="star" size={12} color="#fbbf24" />
-                      ))}
-                      <Text style={styles.reviewDate}>
-                        {new Date(r.created_at).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-                {r.comment ? <Text style={styles.reviewText}>{r.comment}</Text> : null}
-              </View>
-            ))
-          )}
+<View style={styles.sectionHeaderRow}>
+  <Text style={styles.sectionTitle}>Reviews</Text>
+  {reviews.length > 5 && (
+    <Pressable onPress={() => router.push(`/reviews-all?contractorId=${id}` as never)}>
+      <Text style={styles.viewAllLink}>See All</Text>
+    </Pressable>
+  )}
+</View>
+{reviews.length === 0 ? (
+  <View style={styles.card}>
+    <Text style={styles.bio}>No reviews yet.</Text>
+  </View>
+) : (
+  reviews.slice(0, 5).map((r) => (
+    <View key={r.id} style={styles.reviewCard}>
+      <View style={styles.reviewHeader}>
+        <View style={styles.reviewAvatar}>
+          <Text style={styles.reviewAvatarText}>
+            {r.clientName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+          </Text>
+        </View>
+        <View style={styles.reviewMeta}>
+          <Text style={styles.reviewName}>{r.clientName}</Text>
+          <View style={styles.starsRow}>
+            {Array.from({ length: r.rating }).map((_, i) => (
+              <Ionicons key={i} name="star" size={12} color="#fbbf24" />
+            ))}
+            <Text style={styles.reviewDate}>
+              {new Date(r.created_at).toLocaleDateString()}
+            </Text>
+          </View>
+        </View>
+      </View>
+      {r.comment ? <Text style={styles.reviewText}>{r.comment}</Text> : null}
+    </View>
+  ))
+)}
           <View style={{ height: 100 }} />
         </ScrollView>
 
@@ -277,7 +291,9 @@ const styles = StyleSheet.create({
   card: { backgroundColor: "rgba(30,41,59,0.6)", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#1e293b", marginBottom: 24 },
   bio: { fontSize: 15, color: "#94a3b8", lineHeight: 24 },
   portfolioGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 24 },
-  portfolioItem: {  borderRadius: 14, backgroundColor: "#1e293b" },
+  
+  sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+viewAllLink: { fontSize: 13, fontWeight: "700", color: "#22c55e" },portfolioItem: {  borderRadius: 14, backgroundColor: "#1e293b" },
   reviewCard: { backgroundColor: "rgba(30,41,59,0.6)", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#1e293b", marginBottom: 12 },
   reviewHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
   reviewAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#334155", alignItems: "center", justifyContent: "center" },

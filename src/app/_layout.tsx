@@ -2,9 +2,24 @@ import { OTPWidget } from '@msg91comm/sendotp-react-native';
 import * as Linking from "expo-linking";
 import { Stack, useRouter } from "expo-router";
 import { useEffect } from "react";
+import { Alert } from "react-native";
+import { AppAlertHost } from "../lib/AppAlert";
+import { ThemeProvider } from "../lib/ThemeContext";
 import { hydrateCurrentProfile, setCurrentProfile } from "../lib/currentProfile";
+import { setPendingGoogleTokens } from "../lib/pendingGoogleSession";
 import { getPendingRole } from "../lib/pendingRole";
 import { supabase } from "../lib/supabase";
+
+function decodeJwtEmail(token: string): string | null {
+  try {
+    const payload = token.split('.')[1];
+    const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    const parsed = JSON.parse(decoded);
+    return parsed.email || null;
+  } catch {
+    return null;
+  }
+}
 
 export default function Layout() {
   const router = useRouter();
@@ -42,6 +57,9 @@ export default function Layout() {
       return null;
     };
 
+    // Used only for the "already fully logged in, app reopened" path — a real
+    // Supabase session already exists here (set at the end of a PAST
+    // successful OTP verification, and persisted by AsyncStorage).
     const routeForSession = async (session: any) => {
       if (!session?.user) return;
 
@@ -74,38 +92,12 @@ export default function Layout() {
       }
     };
 
-    const startGoogleOtpVerification = async (session: any) => {
-      if (!session?.user) return;
-
-      const email = session.user.email;
-      if (!email) {
-        await routeForSession(session);
-        return;
-      }
-
-      try {
-        const response = await OTPWidget.sendOTP({ identifier: email });
-        if (response.type === 'success') {
-          hasRouted = true;
-          router.replace({
-            pathname: '/otp',
-            params: {
-              mode: 'google',
-              email,
-              role: getPendingRole(),
-              reqId: response.message,
-            },
-          });
-        } else {
-          console.log('GOOGLE EMAIL OTP SEND FAILED:', JSON.stringify(response));
-          await routeForSession(session);
-        }
-      } catch (err) {
-        console.log('GOOGLE EMAIL OTP ERROR:', err);
-        await routeForSession(session);
-      }
-    };
-
+    // Google OAuth deep-link handler. Does NOT call setSession here anymore —
+    // that used to create a real, persisted login before the OTP screen was
+    // even shown, which is exactly what let someone back out and get in
+    // without ever entering the code. Instead: read the email straight out
+    // of the (unset) token, send the OTP, and hold the tokens in memory —
+    // they only become a real session once OTP verification succeeds.
     const handleUrl = async (url: string | null): Promise<boolean> => {
       if (!url || !url.includes('access_token') || googleUrlProcessed) return false;
 
@@ -119,14 +111,35 @@ export default function Layout() {
 
       googleUrlProcessed = true;
 
-      const { error } = await supabase.auth.setSession({ access_token, refresh_token });
-      if (error) {
-        console.log('SET SESSION ERROR:', error.message);
+      const email = decodeJwtEmail(access_token);
+      if (!email) {
+        console.log('Could not read email from Google token');
         return true;
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      await startGoogleOtpVerification(sessionData?.session);
+      try {
+        const response = await OTPWidget.sendOTP({ identifier: email });
+        if (response.type === 'success') {
+          hasRouted = true;
+          setPendingGoogleTokens(access_token, refresh_token);
+          router.replace({
+            pathname: '/otp',
+            params: {
+              mode: 'google',
+              email,
+              role: getPendingRole(),
+              reqId: response.message,
+            },
+          });
+        } else {
+          console.log('GOOGLE EMAIL OTP SEND FAILED:', JSON.stringify(response));
+          Alert.alert("Error", "Could not send verification code. Please try again.");
+        }
+      } catch (err) {
+        console.log('GOOGLE EMAIL OTP ERROR:', err);
+        Alert.alert("Error", "Could not send verification code. Please try again.");
+      }
+
       return true;
     };
 
@@ -187,6 +200,9 @@ export default function Layout() {
   }, []);
 
   return (
-    <Stack screenOptions={{ headerShown: false }} />
+    <ThemeProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+      <AppAlertHost />
+    </ThemeProvider>
   );
 }
