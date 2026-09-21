@@ -16,9 +16,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
+import { useTheme } from "../lib/ThemeContext";
 
 export default function ChatScreen() {
   const router = useRouter();
+  const { colors, mode } = useTheme();
   const { contractorId, clientId, projectId, viewerRole } = useLocalSearchParams<{
     contractorId?: string;
     clientId?: string;
@@ -114,15 +116,12 @@ export default function ChatScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
 
-      <LinearGradient
-        colors={["#0f172a", "#020617", "#0a0f1a"]}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.glowGreen} />
-      <View style={styles.glowBlue} />
+      <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
+      <View style={[styles.glowGreen, { backgroundColor: colors.glowGreenBg }]} />
+      <View style={[styles.glowBlue, { backgroundColor: colors.glowBlueBg }]} />
 
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
@@ -131,16 +130,16 @@ export default function ChatScreen() {
           keyboardVerticalOffset={0}
         >
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
             <Pressable
-              style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.backBtn, { backgroundColor: colors.surfaceSolid, borderColor: colors.border }, pressed && styles.pressed]}
               onPress={() => router.back()}
             >
-              <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
             </Pressable>
 
             <View style={styles.headerCenter}>
-              <Text style={styles.headerName} numberOfLines={1}>
+              <Text style={[styles.headerName, { color: colors.textPrimary }]} numberOfLines={1}>
                 {otherName}
               </Text>
             </View>
@@ -150,12 +149,12 @@ export default function ChatScreen() {
 
           {/* Persistent project bar — OLX-style, tap for full details, stays visible while scrolling */}
           {project ? (
-            <Pressable style={styles.projectBar} onPress={() => setShowProjectInfo(true)}>
-              <Ionicons name="construct-outline" size={15} color="#22c55e" />
-              <Text style={styles.projectBarText} numberOfLines={1}>
+            <Pressable style={[styles.projectBar, { backgroundColor: colors.green + '14', borderBottomColor: colors.green + '33' }]} onPress={() => setShowProjectInfo(true)}>
+              <Ionicons name="construct-outline" size={15} color={colors.green} />
+              <Text style={[styles.projectBarText, { color: colors.green }]} numberOfLines={1}>
                 {project.title}
               </Text>
-              <Ionicons name="chevron-forward" size={14} color="#64748b" />
+              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
             </Pressable>
           ) : null}
 
@@ -170,7 +169,7 @@ export default function ChatScreen() {
             }
           >
             {messages.length === 0 ? (
-              <Text style={styles.emptyText}>No messages yet. Say hi!</Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>No messages yet. Say hi!</Text>
             ) : (
               messages.map((msg) => {
                 const sent = msg.sender_id === myId;
@@ -185,13 +184,16 @@ export default function ChatScreen() {
                     <View
                       style={[
                         styles.bubble,
+                        sent
+                          ? { backgroundColor: colors.green }
+                          : { backgroundColor: colors.surfaceSolid, borderWidth: 1, borderColor: colors.border },
                         sent ? styles.bubbleSent : styles.bubbleReceived,
                       ]}
                     >
                       <Text
                         style={[
                           styles.messageText,
-                          sent ? styles.messageTextSent : styles.messageTextReceived,
+                          sent ? { color: "#ffffff" } : { color: colors.textPrimary },
                         ]}
                       >
                         {msg.content}
@@ -199,7 +201,7 @@ export default function ChatScreen() {
                       <Text
                         style={[
                           styles.messageTime,
-                          sent ? styles.messageTimeSent : styles.messageTimeReceived,
+                          sent ? { color: "rgba(255,255,255,0.75)" } : { color: colors.textMuted },
                         ]}
                       >
                         {new Date(msg.created_at).toLocaleTimeString([], {
@@ -215,11 +217,11 @@ export default function ChatScreen() {
           </ScrollView>
 
           {/* Input */}
-          <View style={styles.inputBar}>
+          <View style={[styles.inputBar, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surfaceSolid, borderColor: colors.border, color: colors.textPrimary }]}
               placeholder="Type a message..."
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               value={input}
               onChangeText={setInput}
               multiline
@@ -228,7 +230,7 @@ export default function ChatScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.sendBtn,
-                !input.trim() && styles.sendBtnDisabled,
+                input.trim() ? { backgroundColor: colors.green } : { backgroundColor: colors.surfaceSolid, borderWidth: 1, borderColor: colors.border },
                 pressed && input.trim() && styles.pressed,
               ]}
               onPress={handleSend}
@@ -237,7 +239,7 @@ export default function ChatScreen() {
               <Ionicons
                 name="send"
                 size={18}
-                color={input.trim() ? "#ffffff" : "#64748b"}
+                color={input.trim() ? "#ffffff" : colors.textMuted}
               />
             </Pressable>
           </View>
@@ -252,53 +254,53 @@ export default function ChatScreen() {
         onRequestClose={() => setShowProjectInfo(false)}
       >
         <Pressable style={styles.modalOverlay} onPress={() => setShowProjectInfo(false)}>
-          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[styles.modalCard, { backgroundColor: colors.bg, borderColor: colors.border }]} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeaderRow}>
-              <Text style={styles.modalKicker}>Project Details</Text>
+              <Text style={[styles.modalKicker, { color: colors.textMuted }]}>Project Details</Text>
               <Pressable onPress={() => setShowProjectInfo(false)}>
-                <Ionicons name="close" size={22} color="#94a3b8" />
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
               </Pressable>
             </View>
 
             {project ? (
               <ScrollView showsVerticalScrollIndicator={false}>
-                <Text style={styles.modalProjectTitle}>{project.title}</Text>
+                <Text style={[styles.modalProjectTitle, { color: colors.textPrimary }]}>{project.title}</Text>
 
-                <View style={styles.modalRow}>
-                  <Text style={styles.modalLabel}>Category</Text>
-                  <Text style={styles.modalValue}>{project.category}</Text>
+                <View style={[styles.modalRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.modalLabel, { color: colors.textMuted }]}>Category</Text>
+                  <Text style={[styles.modalValue, { color: colors.textPrimary }]}>{project.category}</Text>
                 </View>
-                <View style={styles.modalRow}>
-                  <Text style={styles.modalLabel}>Budget</Text>
-                  <Text style={styles.modalValue}>{project.budget}</Text>
+                <View style={[styles.modalRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.modalLabel, { color: colors.textMuted }]}>Budget</Text>
+                  <Text style={[styles.modalValue, { color: colors.textPrimary }]}>{project.budget}</Text>
                 </View>
-                <View style={styles.modalRow}>
-                  <Text style={styles.modalLabel}>Timeline</Text>
-                  <Text style={styles.modalValue}>{project.timeline}</Text>
+                <View style={[styles.modalRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.modalLabel, { color: colors.textMuted }]}>Timeline</Text>
+                  <Text style={[styles.modalValue, { color: colors.textPrimary }]}>{project.timeline}</Text>
                 </View>
-                <View style={styles.modalRow}>
-                  <Text style={styles.modalLabel}>Location</Text>
-                  <Text style={styles.modalValue}>{project.location}</Text>
+                <View style={[styles.modalRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.modalLabel, { color: colors.textMuted }]}>Location</Text>
+                  <Text style={[styles.modalValue, { color: colors.textPrimary }]}>{project.location}</Text>
                 </View>
-                <View style={styles.modalRow}>
-                  <Text style={styles.modalLabel}>Posted</Text>
-                  <Text style={styles.modalValue}>
+                <View style={[styles.modalRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.modalLabel, { color: colors.textMuted }]}>Posted</Text>
+                  <Text style={[styles.modalValue, { color: colors.textPrimary }]}>
                     {new Date(project.created_at).toLocaleDateString()}
                   </Text>
                 </View>
 
                 {viewerRole === 'client' && (
-                  <View style={styles.modalRow}>
-                    <Text style={styles.modalLabel}>Confirmation Code</Text>
-                    <Text style={styles.modalValueCode}>{project.confirmation_code}</Text>
+                  <View style={[styles.modalRow, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.modalLabel, { color: colors.textMuted }]}>Confirmation Code</Text>
+                    <Text style={[styles.modalValueCode, { color: colors.green }]}>{project.confirmation_code}</Text>
                   </View>
                 )}
 
-                <Text style={styles.modalDescLabel}>Description</Text>
-                <Text style={styles.modalDesc}>{project.description}</Text>
+                <Text style={[styles.modalDescLabel, { color: colors.textMuted }]}>Description</Text>
+                <Text style={[styles.modalDesc, { color: colors.textSecondary }]}>{project.description}</Text>
               </ScrollView>
             ) : (
-              <Text style={styles.emptyText}>Loading...</Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>Loading...</Text>
             )}
           </Pressable>
         </Pressable>
@@ -308,147 +310,42 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  flex: {
-    flex: 1,
-  },
-  glowGreen: {
-    position: "absolute",
-    top: -60,
-    right: -40,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: "rgba(34, 197, 94, 0.08)",
-  },
-  glowBlue: {
-    position: "absolute",
-    bottom: 80,
-    left: -80,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "rgba(59, 130, 246, 0.06)",
-  },
-  safe: {
-    flex: 1,
-  },
+  root: { flex: 1 },
+  flex: { flex: 1 },
+  glowGreen: { position: "absolute", top: -60, right: -40, width: 220, height: 220, borderRadius: 110 },
+  glowBlue: { position: "absolute", bottom: 80, left: -80, width: 260, height: 260, borderRadius: 130 },
+  safe: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#1e293b",
-    backgroundColor: "rgba(15, 23, 42, 0.6)",
   },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "rgba(30, 41, 59, 0.8)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
-  headerName: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#f8fafc",
-    letterSpacing: -0.2,
-  },
-  headerSpacer: {
-    width: 40,
-  },
+  backBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  headerCenter: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
+  headerName: { fontSize: 17, fontWeight: "700", letterSpacing: -0.2 },
+  headerSpacer: { width: 40 },
   projectBar: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: "rgba(34, 197, 94, 0.08)",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(34, 197, 94, 0.2)",
   },
-  projectBarText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#22c55e",
-  },
-  messagesScroll: {
-    flex: 1,
-  },
-  messagesContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 16,
-    gap: 10,
-  },
-  emptyText: {
-    textAlign: "center",
-    color: "#64748b",
-    fontSize: 14,
-    marginTop: 40,
-  },
-  messageRow: {
-    flexDirection: "row",
-    marginBottom: 4,
-  },
-  messageRowSent: {
-    justifyContent: "flex-end",
-  },
-  messageRowReceived: {
-    justifyContent: "flex-start",
-  },
-  bubble: {
-    maxWidth: "78%",
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  bubbleSent: {
-    backgroundColor: "#22c55e",
-    borderBottomRightRadius: 4,
-  },
-  bubbleReceived: {
-    backgroundColor: "rgba(30, 41, 59, 0.85)",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    borderBottomLeftRadius: 4,
-  },
-  messageText: {
-    fontSize: 15,
-    lineHeight: 21,
-  },
-  messageTextSent: {
-    color: "#ffffff",
-    fontWeight: "500",
-  },
-  messageTextReceived: {
-    color: "#e2e8f0",
-    fontWeight: "500",
-  },
-  messageTime: {
-    fontSize: 10,
-    marginTop: 6,
-    alignSelf: "flex-end",
-  },
-  messageTimeSent: {
-    color: "rgba(255, 255, 255, 0.75)",
-  },
-  messageTimeReceived: {
-    color: "#64748b",
-  },
+  projectBarText: { flex: 1, fontSize: 13, fontWeight: "600" },
+  messagesScroll: { flex: 1 },
+  messagesContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16, gap: 10 },
+  emptyText: { textAlign: "center", fontSize: 14, marginTop: 40 },
+  messageRow: { flexDirection: "row", marginBottom: 4 },
+  messageRowSent: { justifyContent: "flex-end" },
+  messageRowReceived: { justifyContent: "flex-start" },
+  bubble: { maxWidth: "78%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
+  bubbleSent: { borderBottomRightRadius: 4 },
+  bubbleReceived: { borderBottomLeftRadius: 4 },
+  messageText: { fontSize: 15, lineHeight: 21, fontWeight: "500" },
+  messageTime: { fontSize: 10, marginTop: 6, alignSelf: "flex-end" },
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -456,107 +353,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: "#1e293b",
-    backgroundColor: "rgba(15, 23, 42, 0.95)",
   },
   input: {
     flex: 1,
     minHeight: 44,
     maxHeight: 120,
-    backgroundColor: "rgba(30, 41, 59, 0.7)",
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 15,
-    color: "#f8fafc",
     borderWidth: 1,
-    borderColor: "#1e293b",
   },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#22c55e",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sendBtnDisabled: {
-    backgroundColor: "rgba(30, 41, 59, 0.7)",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.96 }],
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "flex-end",
-  },
-  modalCard: {
-    backgroundColor: "#0f172a",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    maxHeight: "75%",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  modalHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  modalKicker: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#64748b",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  modalProjectTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#f8fafc",
-    marginBottom: 16,
-  },
-  modalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1e293b",
-  },
-  modalLabel: {
-    fontSize: 14,
-    color: "#64748b",
-  },
-  modalValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#f8fafc",
-  },
-  modalValueCode: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#22c55e",
-    letterSpacing: 2,
-  },
-  modalDescLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#64748b",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginTop: 18,
-    marginBottom: 8,
-  },
-  modalDesc: {
-    fontSize: 14,
-    color: "#cbd5e1",
-    lineHeight: 21,
-    paddingBottom: 20,
-  },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.96 }] },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  modalCard: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: "75%", borderWidth: 1 },
+  modalHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  modalKicker: { fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
+  modalProjectTitle: { fontSize: 20, fontWeight: "800", marginBottom: 16 },
+  modalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 10, borderBottomWidth: 1 },
+  modalLabel: { fontSize: 14 },
+  modalValue: { fontSize: 14, fontWeight: "600" },
+  modalValueCode: { fontSize: 16, fontWeight: "800", letterSpacing: 2 },
+  modalDescLabel: { fontSize: 12, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 18, marginBottom: 8 },
+  modalDesc: { fontSize: 14, lineHeight: 21, paddingBottom: 20 },
 });

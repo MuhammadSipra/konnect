@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getCurrentProfileId, getCurrentRole } from '../lib/currentProfile';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../lib/ThemeContext';
 
 const TABS = [
   { key: "home", label: "Home", icon: "home" as const, route: "/contractor" },
@@ -56,6 +57,7 @@ async function resolveMyIdentity(): Promise<{ id: number; role: string } | null>
 
 export default function MessagesScreen() {
   const router = useRouter();
+  const { colors, mode } = useTheme();
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [myId, setMyId] = useState<number | null>(null);
@@ -164,42 +166,39 @@ export default function MessagesScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
 
-      <LinearGradient
-        colors={["#0f172a", "#020617", "#0a0f1a"]}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.glowGreen} />
-      <View style={styles.glowBlue} />
+      <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
+      <View style={[styles.glowGreen, { backgroundColor: colors.glowGreenBg }]} />
+      <View style={[styles.glowBlue, { backgroundColor: colors.glowBlueBg }]} />
 
       <SafeAreaView style={styles.safe} edges={["top"]}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Messages</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Messages</Text>
         </View>
 
         {/* Search */}
-        <View style={styles.searchWrap}>
-          <Ionicons name="search" size={18} color="#64748b" />
+        <View style={[styles.searchWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name="search" size={18} color={colors.textMuted} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.textPrimary }]}
             placeholder="Search conversations..."
-            placeholderTextColor="#64748b"
+            placeholderTextColor={colors.textMuted}
             value={search}
             onChangeText={setSearch}
           />
           {search.length > 0 && (
             <Pressable onPress={() => setSearch("")} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color="#64748b" />
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </Pressable>
           )}
         </View>
 
         {loading ? (
           <View style={styles.emptyState}>
-            <ActivityIndicator size="large" color="#22c55e" />
+            <ActivityIndicator size="large" color={colors.green} />
           </View>
         ) : (
           <ScrollView
@@ -210,8 +209,8 @@ export default function MessagesScreen() {
           >
             {filteredConversations.length === 0 ? (
               <View style={styles.emptyState}>
-                <Ionicons name="chatbubbles-outline" size={40} color="#334155" />
-                <Text style={styles.emptyText}>No conversations yet</Text>
+                <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No conversations yet</Text>
               </View>
             ) : (
               filteredConversations.map((conv, i) => (
@@ -219,6 +218,7 @@ export default function MessagesScreen() {
                   key={`${conv.projectId}-${conv.otherId}`}
                   style={({ pressed }) => [
                     styles.conversationRow,
+                    { borderBottomColor: colors.border },
                     pressed && styles.pressed,
                   ]}
                   onPress={() => handleConversationPress(conv)}
@@ -231,22 +231,22 @@ export default function MessagesScreen() {
 
                   <View style={styles.conversationBody}>
   <View style={styles.conversationTop}>
-    <Text style={styles.conversationName} numberOfLines={1}>
+    <Text style={[styles.conversationName, { color: colors.textPrimary }]} numberOfLines={1}>
       {conv.name}
     </Text>
-    <Text style={styles.conversationTime}>
+    <Text style={[styles.conversationTime, { color: colors.textMuted }]}>
       {new Date(conv.time).toLocaleDateString()}
     </Text>
   </View>
   {conv.projectTitle ? (
-    <Text style={styles.projectTag} numberOfLines={1}>{conv.projectTitle}</Text>
+    <Text style={[styles.projectTag, { color: colors.green }]} numberOfLines={1}>{conv.projectTitle}</Text>
   ) : null}
   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-    <Text style={[styles.lastMessage, { flex: 1 }]} numberOfLines={1}>
+    <Text style={[styles.lastMessage, { flex: 1, color: colors.textSecondary }]} numberOfLines={1}>
       {conv.lastMessage}
     </Text>
     {conv.unread > 0 && (
-      <View style={styles.unreadBadge}>
+      <View style={[styles.unreadBadge, { backgroundColor: colors.green }]}>
         <Text style={styles.unreadText}>{conv.unread}</Text>
       </View>
     )}
@@ -261,7 +261,7 @@ export default function MessagesScreen() {
         )}
 
         {/* Bottom Tab Bar */}
-        <View style={styles.tabBarWrap}>
+        <View style={[styles.tabBarWrap, { backgroundColor: colors.surfaceSolid, borderTopColor: colors.border }]}>
           <SafeAreaView edges={["bottom"]}>
             <View style={styles.tabBar}>
               {TABS.map((tab) => {
@@ -279,10 +279,10 @@ export default function MessagesScreen() {
                           : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)
                       }
                       size={22}
-                      color={active ? "#22c55e" : "#64748b"}
+                      color={active ? colors.green : colors.textMuted}
                     />
                     <Text
-                      style={[styles.tabLabel, active && styles.tabLabelActive]}
+                      style={[styles.tabLabel, { color: active ? colors.green : colors.textMuted }]}
                     >
                       {tab.label}
                     </Text>
@@ -298,171 +298,32 @@ export default function MessagesScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  glowGreen: {
-    position: "absolute",
-    top: -60,
-    right: -40,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: "rgba(34, 197, 94, 0.1)",
-  },
-  glowBlue: {
-    position: "absolute",
-    bottom: 120,
-    left: -80,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "rgba(59, 130, 246, 0.08)",
-  },
-  safe: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#f8fafc",
-    letterSpacing: -0.5,
-  },
-  searchWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginHorizontal: 20,
-    marginBottom: 16,
-    backgroundColor: "rgba(30, 41, 59, 0.7)",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: "#f8fafc",
-    padding: 0,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-  },
-  conversationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1e293b",
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#ffffff",
-  },
-  conversationBody: {
-    flex: 1,
-    gap: 3,
-  },
-  conversationTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 8,
-  },
-  conversationName: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#f8fafc",
-  },
-  conversationTime: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#64748b",
-  },
-  projectTag: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#22c55e",
-  },
-  lastMessage: {
-    fontSize: 14,
-    color: "#94a3b8",
-    fontWeight: "500",
-  },
-  unreadBadge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "#22c55e",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 6,
-  },
-  unreadText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 60,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: "#64748b",
-    fontWeight: "500",
-  },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  tabBarWrap: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(15, 23, 42, 0.95)",
-    borderTopWidth: 1,
-    borderTopColor: "#1e293b",
-  },
-  tabBar: {
-    flexDirection: "row",
-    paddingTop: 10,
-    paddingBottom: 6,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: "center",
-    gap: 4,
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#64748b",
-  },
-  tabLabelActive: {
-    color: "#22c55e",
-  },
+  root: { flex: 1 },
+  glowGreen: { position: "absolute", top: -60, right: -40, width: 220, height: 220, borderRadius: 110 },
+  glowBlue: { position: "absolute", bottom: 120, left: -80, width: 260, height: 260, borderRadius: 130 },
+  safe: { flex: 1 },
+  header: { paddingHorizontal: 20, paddingVertical: 12 },
+  headerTitle: { fontSize: 28, fontWeight: "800", letterSpacing: -0.5 },
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 20, marginBottom: 16, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1 },
+  searchInput: { flex: 1, fontSize: 15, padding: 0 },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20 },
+  conversationRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, borderBottomWidth: 1 },
+  avatar: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
+  avatarText: { fontSize: 18, fontWeight: "800", color: "#ffffff" },
+  conversationBody: { flex: 1, gap: 3 },
+  conversationTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  conversationName: { flex: 1, fontSize: 16, fontWeight: "700" },
+  conversationTime: { fontSize: 12, fontWeight: "500" },
+  projectTag: { fontSize: 12, fontWeight: "600" },
+  lastMessage: { fontSize: 14, fontWeight: "500" },
+  unreadBadge: { minWidth: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  unreadText: { fontSize: 12, fontWeight: "700", color: "#ffffff" },
+  emptyState: { alignItems: "center", justifyContent: "center", paddingTop: 60, gap: 12 },
+  emptyText: { fontSize: 15, fontWeight: "500" },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  tabBarWrap: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopWidth: 1 },
+  tabBar: { flexDirection: "row", paddingTop: 10, paddingBottom: 6 },
+  tabItem: { flex: 1, alignItems: "center", gap: 4 },
+  tabLabel: { fontSize: 11, fontWeight: "600" },
 });

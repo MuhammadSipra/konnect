@@ -6,7 +6,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -20,8 +19,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AppAlert } from "../lib/AppAlert";
 import { setCurrentProfile } from "../lib/currentProfile";
 import { supabase } from "../lib/supabase";
+import { useTheme } from "../lib/ThemeContext";
 
 const SKILLS = ["Interior", "Civil", "Electrical", "Plumbing", "Carpentry", "Modular Furniture"] as const;
 const BUSINESS_TYPES = ["Individual", "Partnership", "Pvt Ltd", "Proprietorship"] as const;
@@ -55,15 +56,17 @@ function PhotoPicker({
   label,
   uri,
   onPicked,
+  colors,
 }: {
   label: string;
   uri: string | null;
   onPicked: (localUri: string) => void;
+  colors: any;
 }) {
   const handlePick = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert("Permission needed", "Please allow photo access to upload this document.");
+      AppAlert.show("Permission needed", "Please allow photo access to upload this document.");
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -76,13 +79,13 @@ function PhotoPicker({
   };
 
   return (
-    <Pressable style={styles.photoPicker} onPress={handlePick}>
+    <Pressable style={[styles.photoPicker, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={handlePick}>
       {uri ? (
         <Image source={{ uri }} style={styles.photoPreview} />
       ) : (
         <>
-          <Ionicons name="camera-outline" size={28} color="#64748b" />
-          <Text style={styles.photoPickerText}>{label}</Text>
+          <Ionicons name="camera-outline" size={28} color={colors.textMuted} />
+          <Text style={[styles.photoPickerText, { color: colors.textMuted }]}>{label}</Text>
         </>
       )}
     </Pressable>
@@ -93,10 +96,12 @@ function ChipGroup<T extends string>({
   options,
   selected,
   onToggle,
+  colors,
 }: {
   options: readonly T[];
   selected: T[];
   onToggle: (v: T) => void;
+  colors: any;
 }) {
   return (
     <View style={styles.chipRow}>
@@ -106,9 +111,13 @@ function ChipGroup<T extends string>({
           <Pressable
             key={option}
             onPress={() => onToggle(option)}
-            style={[styles.chip, active && styles.chipActive]}
+            style={[
+              styles.chip,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              active && { backgroundColor: colors.green + '33', borderColor: colors.green },
+            ]}
           >
-            <Text style={[styles.chipText, active && styles.chipTextActive]}>{option}</Text>
+            <Text style={[styles.chipText, { color: colors.textSecondary }, active && { color: colors.green }]}>{option}</Text>
           </Pressable>
         );
       })}
@@ -118,6 +127,7 @@ function ChipGroup<T extends string>({
 
 export default function SignupScreen() {
   const router = useRouter();
+  const { colors, mode } = useTheme();
   const {
     role = "client",
     phone: phoneParam = "",
@@ -175,11 +185,11 @@ export default function SignupScreen() {
 
   const handleSendSecondaryOtp = async (channel: "phone" | "email") => {
     if (channel === "phone" && phoneValue.length !== 10) {
-      Alert.alert("Invalid number", "Enter a valid 10-digit mobile number.");
+      AppAlert.show("Invalid number", "Enter a valid 10-digit mobile number.");
       return;
     }
     if (channel === "email" && !email.includes("@")) {
-      Alert.alert("Invalid email", "Enter a valid email address.");
+      AppAlert.show("Invalid email", "Enter a valid email address.");
       return;
     }
 
@@ -192,10 +202,10 @@ export default function SignupScreen() {
         setOtpModalFor(channel);
         setSecondaryOtp("");
       } else {
-        Alert.alert("Error", "Could not send OTP. Please try again.");
+        AppAlert.show("Error", "Could not send OTP. Please try again.");
       }
     } catch (err) {
-      Alert.alert("Error", "Could not send OTP. Please try again.");
+      AppAlert.show("Error", "Could not send OTP. Please try again.");
     } finally {
       setOtpBusy(false);
     }
@@ -212,10 +222,10 @@ export default function SignupScreen() {
         setOtpModalFor(null);
         setSecondaryOtp("");
       } else {
-        Alert.alert("Invalid Code", "The OTP you entered is incorrect or expired.");
+        AppAlert.show("Invalid Code", "The OTP you entered is incorrect or expired.");
       }
     } catch (err) {
-      Alert.alert("Error", "Verification failed. Please try again.");
+      AppAlert.show("Error", "Verification failed. Please try again.");
     } finally {
       setOtpBusy(false);
     }
@@ -223,7 +233,7 @@ export default function SignupScreen() {
 
   const handleNext = () => {
     if (step === 1 && !step1Valid) {
-      Alert.alert("Missing info", "Please fill at least your name and location.");
+      AppAlert.show("Missing info", "Please fill at least your name and location.");
       return;
     }
     setStep((s) => Math.min(s + 1, totalSteps));
@@ -295,7 +305,7 @@ export default function SignupScreen() {
   setSubmitting(false);
   
   if (error) {
-    Alert.alert("Signup Error", error.message);
+    AppAlert.show("Signup Error", error.message);
     console.log("SIGNUP ERROR:", error.message);
     return;
   }
@@ -308,22 +318,22 @@ export default function SignupScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
-      <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
-      <View style={styles.glowGreen} />
-      <View style={styles.glowBlue} />
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
+      <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
+      <View style={[styles.glowGreen, { backgroundColor: colors.glowGreenBg }]} />
+      <View style={[styles.glowBlue, { backgroundColor: colors.glowBlueBg }]} />
 
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <View style={styles.header}>
             <Pressable
-              style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
               onPress={() => (step > 1 ? setStep((s) => s - 1) : router.back())}
             >
-              <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
             </Pressable>
-            <Text style={styles.headerTitle}>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
               {isContractor ? `Contractor Signup (${step}/${totalSteps})` : "Complete Your Profile"}
             </Text>
             <View style={styles.headerSpacer} />
@@ -334,7 +344,7 @@ export default function SignupScreen() {
               {Array.from({ length: totalSteps }).map((_, i) => (
                 <View
                   key={i}
-                  style={[styles.progressDot, i + 1 <= step && styles.progressDotActive]}
+                  style={[styles.progressDot, { backgroundColor: colors.border }, i + 1 <= step && { backgroundColor: colors.green }]}
                 />
               ))}
             </View>
@@ -348,44 +358,44 @@ export default function SignupScreen() {
           >
             {step === 1 && (
               <>
-                <Text style={styles.label}>Full Name</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Full Name</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="Your name"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.textMuted}
                   value={name}
                   onChangeText={setName}
                 />
 
-                <Text style={styles.label}>Location</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Location</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="Area, city"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.textMuted}
                   value={location}
                   onChangeText={setLocation}
                 />
 
                 {/* Mobile Number — editable+verify if this wasn't the login channel */}
-                <Text style={styles.label}>Mobile Number</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Mobile Number</Text>
                 {phoneVerified ? (
-                  <View style={[styles.input, styles.disabledInput]}>
-                    <Text style={styles.disabledInputText}>+91 {phoneValue || "—"}</Text>
-                    <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
+                  <View style={[styles.input, styles.disabledInput, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Text style={[styles.disabledInputText, { color: colors.textSecondary }]}>+91 {phoneValue || "—"}</Text>
+                    <Ionicons name="checkmark-circle" size={18} color={colors.green} />
                   </View>
                 ) : (
                   <View style={styles.verifyRow}>
                     <TextInput
-                      style={[styles.input, styles.verifyRowInput]}
+                      style={[styles.input, styles.verifyRowInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                       placeholder="10-digit number"
-                      placeholderTextColor="#64748b"
+                      placeholderTextColor={colors.textMuted}
                       value={phoneValue}
                       onChangeText={setPhoneValue}
                       keyboardType="phone-pad"
                       maxLength={10}
                     />
                     <Pressable
-                      style={styles.verifyBtn}
+                      style={[styles.verifyBtn, { backgroundColor: colors.blueDark }]}
                       onPress={() => handleSendSecondaryOtp("phone")}
                       disabled={otpBusy}
                     >
@@ -395,25 +405,25 @@ export default function SignupScreen() {
                 )}
 
                 {/* Gmail — editable+verify if this wasn't the login channel */}
-                <Text style={styles.label}>Gmail</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Gmail</Text>
                 {emailVerified ? (
-                  <View style={[styles.input, styles.disabledInput]}>
-                    <Text style={styles.disabledInputText}>{email || "—"}</Text>
-                    <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
+                  <View style={[styles.input, styles.disabledInput, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Text style={[styles.disabledInputText, { color: colors.textSecondary }]}>{email || "—"}</Text>
+                    <Ionicons name="checkmark-circle" size={18} color={colors.green} />
                   </View>
                 ) : (
                   <View style={styles.verifyRow}>
                     <TextInput
-                      style={[styles.input, styles.verifyRowInput]}
+                      style={[styles.input, styles.verifyRowInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                       placeholder="you@gmail.com"
-                      placeholderTextColor="#64748b"
+                      placeholderTextColor={colors.textMuted}
                       value={email}
                       onChangeText={setEmail}
                       autoCapitalize="none"
                       keyboardType="email-address"
                     />
                     <Pressable
-                      style={styles.verifyBtn}
+                      style={[styles.verifyBtn, { backgroundColor: colors.blueDark }]}
                       onPress={() => handleSendSecondaryOtp("email")}
                       disabled={otpBusy}
                     >
@@ -422,11 +432,11 @@ export default function SignupScreen() {
                   </View>
                 )}
 
-                <Text style={styles.label}>WhatsApp Number</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>WhatsApp Number</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="10-digit number"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.textMuted}
                   value={whatsapp}
                   onChangeText={setWhatsapp}
                   keyboardType="phone-pad"
@@ -435,7 +445,7 @@ export default function SignupScreen() {
 
                 {isContractor && (
                   <>
-                    <Text style={styles.label}>Skills / Category</Text>
+                    <Text style={[styles.label, { color: colors.textMuted }]}>Skills / Category</Text>
                     <ChipGroup
                       options={SKILLS}
                       selected={skills}
@@ -444,23 +454,25 @@ export default function SignupScreen() {
                           prev.includes(v) ? prev.filter((s) => s !== v) : [...prev, v]
                         )
                       }
+                      colors={colors}
                     />
 
-                    <Text style={styles.label}>Experience (years)</Text>
+                    <Text style={[styles.label, { color: colors.textMuted }]}>Experience (years)</Text>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                       placeholder="e.g. 5"
-                      placeholderTextColor="#64748b"
+                      placeholderTextColor={colors.textMuted}
                       value={experience}
                       onChangeText={setExperience}
                       keyboardType="number-pad"
                     />
 
-                    <Text style={styles.label}>Profile Photo</Text>
+                    <Text style={[styles.label, { color: colors.textMuted }]}>Profile Photo</Text>
                     <PhotoPicker
                       label="Upload profile photo"
                       uri={profilePhotoLocal}
                       onPicked={setProfilePhotoLocal}
+                      colors={colors}
                     />
                   </>
                 )}
@@ -469,61 +481,62 @@ export default function SignupScreen() {
 
             {isContractor && step === 2 && (
               <>
-                <Text style={styles.stepIntro}>Identity Verification</Text>
+                <Text style={[styles.stepIntro, { color: colors.textPrimary }]}>Identity Verification</Text>
 
-                <Text style={styles.label}>Aadhaar Number</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Aadhaar Number</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="XXXX XXXX XXXX"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.textMuted}
                   value={aadhaarNumber}
                   onChangeText={setAadhaarNumber}
                   keyboardType="number-pad"
                   maxLength={12}
                 />
-                <Text style={styles.label}>Aadhaar Card Photo</Text>
-                <PhotoPicker label="Upload Aadhaar card" uri={aadhaarPhotoLocal} onPicked={setAadhaarPhotoLocal} />
+                <Text style={[styles.label, { color: colors.textMuted }]}>Aadhaar Card Photo</Text>
+                <PhotoPicker label="Upload Aadhaar card" uri={aadhaarPhotoLocal} onPicked={setAadhaarPhotoLocal} colors={colors} />
 
-                <Text style={styles.label}>PAN Number</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>PAN Number</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="ABCDE1234F"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.textMuted}
                   value={panNumber}
                   onChangeText={(t) => setPanNumber(t.toUpperCase())}
                   autoCapitalize="characters"
                   maxLength={10}
                 />
-                <Text style={styles.label}>PAN Card Photo</Text>
-                <PhotoPicker label="Upload PAN card" uri={panPhotoLocal} onPicked={setPanPhotoLocal} />
+                <Text style={[styles.label, { color: colors.textMuted }]}>PAN Card Photo</Text>
+                <PhotoPicker label="Upload PAN card" uri={panPhotoLocal} onPicked={setPanPhotoLocal} colors={colors} />
               </>
             )}
 
             {isContractor && step === 3 && (
               <>
-                <Text style={styles.stepIntro}>Business Verification</Text>
+                <Text style={[styles.stepIntro, { color: colors.textPrimary }]}>Business Verification</Text>
 
-                <Text style={styles.label}>Business / Shop Name</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Business / Shop Name</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="e.g. Sipra Work"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.textMuted}
                   value={businessName}
                   onChangeText={setBusinessName}
                 />
 
-                <Text style={styles.label}>Business Type</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Business Type</Text>
                 <ChipGroup
                   options={BUSINESS_TYPES}
                   selected={businessType}
                   onToggle={(v) => setBusinessType([v])}
+                  colors={colors}
                 />
 
-                <Text style={styles.label}>Business Address</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Business Address</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea]}
+                  style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="Full business address"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.textMuted}
                   value={businessAddress}
                   onChangeText={setBusinessAddress}
                   multiline
@@ -531,14 +544,15 @@ export default function SignupScreen() {
 
                 {needsBusinessDoc && (
                   <>
-                    <Text style={styles.label}>Business Registration Document</Text>
-                    <Text style={styles.helperText}>
+                    <Text style={[styles.label, { color: colors.textMuted }]}>Business Registration Document</Text>
+                    <Text style={[styles.helperText, { color: colors.textMuted }]}>
                       Upload your {businessType[0]} registration certificate / partnership deed / incorporation proof.
                     </Text>
                     <PhotoPicker
                       label="Upload business registration document"
                       uri={businessDocLocal}
                       onPicked={setBusinessDocLocal}
+                      colors={colors}
                     />
                   </>
                 )}
@@ -547,50 +561,50 @@ export default function SignupScreen() {
 
             {isContractor && step === 4 && (
               <>
-                <Text style={styles.stepIntro}>GST & Payment Details (optional)</Text>
+                <Text style={[styles.stepIntro, { color: colors.textPrimary }]}>GST & Payment Details (optional)</Text>
 
-                <Text style={styles.label}>GST Number</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>GST Number</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="Leave blank if not registered"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.textMuted}
                   value={gstNumber}
                   onChangeText={(t) => setGstNumber(t.toUpperCase())}
                   autoCapitalize="characters"
                 />
 
-                <Text style={styles.label}>Bank Account Number</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Bank Account Number</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="Account number"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.textMuted}
                   value={bankAccount}
                   onChangeText={setBankAccount}
                   keyboardType="number-pad"
                 />
 
-                <Text style={styles.label}>IFSC Code</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>IFSC Code</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="e.g. SBIN0001234"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.textMuted}
                   value={ifsc}
                   onChangeText={(t) => setIfsc(t.toUpperCase())}
                   autoCapitalize="characters"
                 />
 
-                <Text style={styles.label}>Cancelled Cheque / Passbook Photo</Text>
-                <PhotoPicker label="Upload cheque photo" uri={chequePhotoLocal} onPicked={setChequePhotoLocal} />
+                <Text style={[styles.label, { color: colors.textMuted }]}>Cancelled Cheque / Passbook Photo</Text>
+                <PhotoPicker label="Upload cheque photo" uri={chequePhotoLocal} onPicked={setChequePhotoLocal} colors={colors} />
               </>
             )}
 
             <View style={{ height: 40 }} />
           </ScrollView>
 
-          <View style={styles.bottomBar}>
+          <View style={[styles.bottomBar, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
             {isContractor && (
               <Pressable style={styles.skipBtn} onPress={handleSkip} disabled={submitting}>
-                <Text style={styles.skipBtnText}>Skip</Text>
+                <Text style={[styles.skipBtnText, { color: colors.textMuted }]}>Skip</Text>
               </Pressable>
             )}
             <Pressable
@@ -598,7 +612,7 @@ export default function SignupScreen() {
               onPress={step < totalSteps ? handleNext : handleSubmit}
               disabled={submitting}
             >
-              <LinearGradient colors={["#22c55e", "#16a34a"]} style={styles.nextBtn}>
+              <LinearGradient colors={[colors.green, colors.greenDark]} style={styles.nextBtn}>
                 {submitting ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
@@ -615,17 +629,17 @@ export default function SignupScreen() {
       {/* Inline OTP verification modal for the secondary channel */}
       <Modal visible={otpModalFor !== null} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
+          <View style={[styles.modalCard, { backgroundColor: colors.surfaceSolid, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
               Verify your {otpModalFor === "phone" ? "mobile number" : "email"}
             </Text>
-            <Text style={styles.modalSubtitle}>
+            <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
               Enter the code sent to {otpModalFor === "phone" ? "+91 " + phoneValue : email}
             </Text>
             <TextInput
-              style={styles.modalOtpInput}
+              style={[styles.modalOtpInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
               placeholder="Enter OTP"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               value={secondaryOtp}
               onChangeText={setSecondaryOtp}
               keyboardType="number-pad"
@@ -634,16 +648,16 @@ export default function SignupScreen() {
             />
             <View style={styles.modalBtnRow}>
               <Pressable
-                style={styles.modalCancelBtn}
+                style={[styles.modalCancelBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 onPress={() => {
                   setOtpModalFor(null);
                   setSecondaryOtp("");
                 }}
               >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                <Text style={[styles.modalCancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
               </Pressable>
               <Pressable
-                style={styles.modalConfirmBtn}
+                style={[styles.modalConfirmBtn, { backgroundColor: colors.green }]}
                 onPress={handleConfirmSecondaryOtp}
                 disabled={otpBusy}
               >
@@ -662,53 +676,50 @@ export default function SignupScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#020617" },
+  root: { flex: 1 },
   flex: { flex: 1 },
-  glowGreen: { position: "absolute", top: -80, right: -50, width: 260, height: 260, borderRadius: 130, backgroundColor: "rgba(34, 197, 94, 0.1)" },
-  glowBlue: { position: "absolute", bottom: 80, left: -70, width: 280, height: 280, borderRadius: 140, backgroundColor: "rgba(59, 130, 246, 0.08)" },
+  glowGreen: { position: "absolute", top: -80, right: -50, width: 260, height: 260, borderRadius: 130 },
+  glowBlue: { position: "absolute", bottom: 80, left: -70, width: 280, height: 280, borderRadius: 140 },
   safe: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
-  backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(30, 41, 59, 0.8)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#1e293b" },
-  headerTitle: { fontSize: 16, fontWeight: "700", color: "#f8fafc" },
+  backBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  headerTitle: { fontSize: 16, fontWeight: "700" },
   headerSpacer: { width: 40 },
   progressRow: { flexDirection: "row", gap: 6, paddingHorizontal: 20, marginBottom: 8 },
-  progressDot: { flex: 1, height: 4, borderRadius: 2, backgroundColor: "#1e293b" },
-  progressDotActive: { backgroundColor: "#22c55e" },
+  progressDot: { flex: 1, height: 4, borderRadius: 2 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 12 },
-  stepIntro: { fontSize: 18, fontWeight: "700", color: "#f8fafc", marginBottom: 16 },
-  label: { fontSize: 13, fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, marginTop: 16 },
-  helperText: { fontSize: 12, color: "#64748b", marginBottom: 8 },
-  input: { backgroundColor: "rgba(30, 41, 59, 0.7)", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: "#f8fafc", borderWidth: 1, borderColor: "#1e293b" },
+  stepIntro: { fontSize: 18, fontWeight: "700", marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, marginTop: 16 },
+  helperText: { fontSize: 12, marginBottom: 8 },
+  input: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, borderWidth: 1 },
   disabledInput: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", opacity: 0.85 },
-  disabledInputText: { fontSize: 16, color: "#94a3b8" },
+  disabledInputText: { fontSize: 16 },
   textArea: { minHeight: 90, paddingTop: 14, textAlignVertical: "top" },
   verifyRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   verifyRowInput: { flex: 1 },
-  verifyBtn: { backgroundColor: "#2563eb", paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12 },
+  verifyBtn: { paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12 },
   verifyBtnText: { fontSize: 13, fontWeight: "700", color: "#fff" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, backgroundColor: "rgba(30, 41, 59, 0.6)", borderWidth: 1, borderColor: "#1e293b" },
-  chipActive: { backgroundColor: "rgba(34, 197, 94, 0.2)", borderColor: "#22c55e" },
-  chipText: { fontSize: 13, fontWeight: "600", color: "#94a3b8" },
-  chipTextActive: { color: "#22c55e" },
-  photoPicker: { height: 120, borderRadius: 14, backgroundColor: "rgba(30, 41, 59, 0.5)", borderWidth: 1, borderColor: "#1e293b", borderStyle: "dashed", alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  photoPickerText: { marginTop: 8, fontSize: 13, color: "#64748b", fontWeight: "500" },
+  chip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },
+  chipText: { fontSize: 13, fontWeight: "600" },
+  photoPicker: { height: 120, borderRadius: 14, borderWidth: 1, borderStyle: "dashed", alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  photoPickerText: { marginTop: 8, fontSize: 13, fontWeight: "500" },
   photoPreview: { width: "100%", height: "100%" },
-  bottomBar: { flexDirection: "row", gap: 12, paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: "#1e293b", backgroundColor: "rgba(15, 23, 42, 0.95)" },
+  bottomBar: { flexDirection: "row", gap: 12, paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1 },
   skipBtn: { paddingHorizontal: 18, alignItems: "center", justifyContent: "center" },
-  skipBtnText: { fontSize: 15, fontWeight: "600", color: "#64748b" },
+  skipBtnText: { fontSize: 15, fontWeight: "600" },
   nextBtnWrap: { flex: 1, borderRadius: 14, overflow: "hidden" },
   nextBtn: { paddingVertical: 16, alignItems: "center", borderRadius: 14 },
   nextBtnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
-  modalCard: { width: "100%", backgroundColor: "#0f172a", borderRadius: 20, padding: 24, borderWidth: 1, borderColor: "#1e293b" },
-  modalTitle: { fontSize: 18, fontWeight: "700", color: "#f8fafc", marginBottom: 6 },
-  modalSubtitle: { fontSize: 13, color: "#94a3b8", marginBottom: 20 },
-  modalOtpInput: { backgroundColor: "rgba(30, 41, 59, 0.7)", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 20, color: "#f8fafc", borderWidth: 1, borderColor: "#1e293b", textAlign: "center", letterSpacing: 4, marginBottom: 20 },
+  modalCard: { width: "100%", borderRadius: 20, padding: 24, borderWidth: 1 },
+  modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 6 },
+  modalSubtitle: { fontSize: 13, marginBottom: 20 },
+  modalOtpInput: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 20, borderWidth: 1, textAlign: "center", letterSpacing: 4, marginBottom: 20 },
   modalBtnRow: { flexDirection: "row", gap: 12 },
-  modalCancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "rgba(30, 41, 59, 0.7)", borderWidth: 1, borderColor: "#1e293b" },
-  modalCancelBtnText: { fontSize: 14, fontWeight: "600", color: "#94a3b8" },
-  modalConfirmBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#22c55e" },
+  modalCancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", borderWidth: 1 },
+  modalCancelBtnText: { fontSize: 14, fontWeight: "600" },
+  modalConfirmBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center" },
   modalConfirmBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
 });

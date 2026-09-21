@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getCurrentProfileId, setCurrentProfile } from '../lib/currentProfile';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../lib/ThemeContext';
 
 const BOTTOM_TABS = [
   { key: "home", label: "Home", icon: "home" as const, route: "/customer" },
@@ -64,6 +65,7 @@ async function resolveClientId(): Promise<number | null> {
 
 export default function MyProjectsScreen() {
   const router = useRouter();
+  const { colors, mode } = useTheme();
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loggedIn, setLoggedIn] = useState(true);
@@ -132,34 +134,31 @@ export default function MyProjectsScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
 
-      <LinearGradient
-        colors={["#0f172a", "#020617", "#0a0f1a"]}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.glowBlue} />
-      <View style={styles.glowGreen} />
+      <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
+      <View style={[styles.glowBlue, { backgroundColor: colors.glowBlueBg }]} />
+      <View style={[styles.glowGreen, { backgroundColor: colors.glowGreenBg }]} />
 
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Projects</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Projects</Text>
         </View>
 
         {loading ? (
           <View style={styles.centerWrap}>
-            <ActivityIndicator size="large" color="#3b82f6" />
+            <ActivityIndicator size="large" color={colors.blue} />
           </View>
         ) : !loggedIn ? (
           <View style={styles.centerWrap}>
-            <Ionicons name="lock-closed-outline" size={48} color="#334155" />
-            <Text style={styles.emptyText}>Please log in to see your projects</Text>
+            <Ionicons name="lock-closed-outline" size={48} color={colors.textMuted} />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>Please log in to see your projects</Text>
           </View>
         ) : projects.length === 0 ? (
           <View style={styles.centerWrap}>
-            <Ionicons name="folder-open-outline" size={48} color="#334155" />
-            <Text style={styles.emptyText}>No projects posted yet</Text>
+            <Ionicons name="folder-open-outline" size={48} color={colors.textMuted} />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No projects posted yet</Text>
           </View>
         ) : (
           <ScrollView
@@ -172,19 +171,19 @@ export default function MyProjectsScreen() {
               return (
                 <Pressable
                   key={project.id}
-                  style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                  style={({ pressed }) => [styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
                   onPress={() => router.push(`/project-detail?id=${project.id}` as never)}
                 >
                   <View style={styles.cardTop}>
-                    <View style={styles.categoryBadge}>
-                      <Text style={styles.categoryText}>{project.category}</Text>
+                    <View style={[styles.categoryBadge, { backgroundColor: colors.gold + '26', borderColor: colors.gold + '4D' }]}>
+                      <Text style={[styles.categoryText, { color: colors.gold }]}>{project.category}</Text>
                     </View>
-                    <Text style={styles.postedTime}>
+                    <Text style={[styles.postedTime, { color: colors.textMuted }]}>
                       {new Date(project.created_at).toLocaleDateString()}
                     </Text>
                   </View>
 
-                  <Text style={styles.cardTitle}>{project.title}</Text>
+                  <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{project.title}</Text>
 
                   <View style={[styles.statusBadge, { backgroundColor: meta.bg, borderColor: meta.border }]}>
                     <View style={[styles.statusDot, { backgroundColor: meta.color }]} />
@@ -192,23 +191,23 @@ export default function MyProjectsScreen() {
                   </View>
 
                   {project.confirmation_code ? (
-                    <View style={styles.codeBox}>
-                      <Ionicons name="key-outline" size={14} color="#fbbf24" />
-                      <Text style={styles.codeText}>Confirmation Code: {project.confirmation_code}</Text>
+                    <View style={[styles.codeBox, { backgroundColor: colors.gold + '1A', borderColor: colors.gold + '4D' }]}>
+                      <Ionicons name="key-outline" size={14} color={colors.gold} />
+                      <Text style={[styles.codeText, { color: colors.gold }]}>Confirmation Code: {project.confirmation_code}</Text>
                     </View>
                   ) : null}
 
                   <View style={styles.infoRow}>
-                    <Ionicons name="location-outline" size={14} color="#64748b" />
-                    <Text style={styles.infoText}>{project.location}</Text>
+                    <Ionicons name="location-outline" size={14} color={colors.textMuted} />
+                    <Text style={[styles.infoText, { color: colors.textSecondary }]}>{project.location}</Text>
                   </View>
 
                   <View style={styles.infoRow}>
-                    <Ionicons name="time-outline" size={14} color="#64748b" />
-                    <Text style={styles.infoText}>{project.timeline}</Text>
+                    <Ionicons name="time-outline" size={14} color={colors.textMuted} />
+                    <Text style={[styles.infoText, { color: colors.textSecondary }]}>{project.timeline}</Text>
                   </View>
 
-                  <Text style={styles.cardBudget}>{project.budget}</Text>
+                  <Text style={[styles.cardBudget, { color: colors.green }]}>{project.budget}</Text>
                 </Pressable>
               );
             })}
@@ -217,7 +216,7 @@ export default function MyProjectsScreen() {
         )}
 
         {/* Bottom Tab Bar */}
-        <View style={styles.tabBarWrap}>
+        <View style={[styles.tabBarWrap, { backgroundColor: colors.surfaceSolid, borderTopColor: colors.border }]}>
           <SafeAreaView edges={["bottom"]}>
             <View style={styles.tabBar}>
               {BOTTOM_TABS.map((tab) => {
@@ -231,9 +230,9 @@ export default function MyProjectsScreen() {
                     <Ionicons
                       name={active ? tab.icon : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)}
                       size={22}
-                      color={active ? "#22c55e" : "#64748b"}
+                      color={active ? colors.green : colors.textMuted}
                     />
-                    <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                    <Text style={[styles.tabLabel, { color: active ? colors.green : colors.textMuted }]}>
                       {tab.label}
                     </Text>
                   </Pressable>
@@ -248,179 +247,33 @@ export default function MyProjectsScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  glowBlue: {
-    position: "absolute",
-    top: -60,
-    left: -50,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: "rgba(59, 130, 246, 0.1)",
-  },
-  glowGreen: {
-    position: "absolute",
-    bottom: 120,
-    right: -70,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "rgba(34, 197, 94, 0.08)",
-  },
-  safe: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#f8fafc",
-    letterSpacing: -0.5,
-  },
-  centerWrap: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: "#64748b",
-    fontWeight: "500",
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-  card: {
-    backgroundColor: "rgba(30, 41, 59, 0.6)",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  cardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  categoryBadge: {
-    backgroundColor: "rgba(251, 191, 36, 0.15)",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "rgba(251, 191, 36, 0.3)",
-  },
-  categoryText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#fbbf24",
-  },
-  postedTime: {
-    fontSize: 12,
-    color: "#64748b",
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#f8fafc",
-    marginBottom: 10,
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  codeBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(251, 191, 36, 0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(251, 191, 36, 0.3)",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: 10,
-    alignSelf: "flex-start",
-  },
-  codeText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#fbbf24",
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 6,
-  },
-  infoText: {
-    fontSize: 13,
-    color: "#94a3b8",
-  },
-  cardBudget: {
-    marginTop: 8,
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#22c55e",
-  },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  tabBarWrap: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(15, 23, 42, 0.95)",
-    borderTopWidth: 1,
-    borderTopColor: "#1e293b",
-  },
-  tabBar: {
-    flexDirection: "row",
-    paddingTop: 10,
-    paddingBottom: 6,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: "center",
-    gap: 4,
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#64748b",
-  },
-  tabLabelActive: {
-    color: "#22c55e",
-  },
+  root: { flex: 1 },
+  glowBlue: { position: "absolute", top: -60, left: -50, width: 240, height: 240, borderRadius: 120 },
+  glowGreen: { position: "absolute", bottom: 120, right: -70, width: 260, height: 260, borderRadius: 130 },
+  safe: { flex: 1 },
+  header: { paddingHorizontal: 20, paddingVertical: 12 },
+  headerTitle: { fontSize: 28, fontWeight: "800", letterSpacing: -0.5 },
+  centerWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  emptyText: { fontSize: 15, fontWeight: "500" },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
+  card: { borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1 },
+  cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  categoryBadge: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1 },
+  categoryText: { fontSize: 12, fontWeight: "600" },
+  postedTime: { fontSize: 12 },
+  cardTitle: { fontSize: 17, fontWeight: "700", marginBottom: 10 },
+  statusBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1, marginBottom: 10 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusBadgeText: { fontSize: 12, fontWeight: "700" },
+  codeBox: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 10, alignSelf: "flex-start" },
+  codeText: { fontSize: 13, fontWeight: "700" },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
+  infoText: { fontSize: 13 },
+  cardBudget: { marginTop: 8, fontSize: 16, fontWeight: "700" },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  tabBarWrap: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopWidth: 1 },
+  tabBar: { flexDirection: "row", paddingTop: 10, paddingBottom: 6 },
+  tabItem: { flex: 1, alignItems: "center", gap: 4 },
+  tabLabel: { fontSize: 11, fontWeight: "600" },
 });

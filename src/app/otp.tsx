@@ -4,7 +4,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,9 +14,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AppAlert } from "../lib/AppAlert";
 import { setCurrentProfile } from "../lib/currentProfile";
 import { clearPendingGoogleTokens, getPendingGoogleTokens } from "../lib/pendingGoogleSession";
 import { supabase } from "../lib/supabase";
+import { useTheme } from "../lib/ThemeContext";
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 30;
 
@@ -39,11 +40,12 @@ function maskEmail(email: string): string {
 
 export default function OtpScreen() {
   const router = useRouter();
+  const { colors, mode } = useTheme();
   const {
     phone = "",
     role = "client",
     reqId = "",
-    mode = "phone",
+    mode: paramMode = "phone",
     email = "",
   } = useLocalSearchParams<{
     phone?: string;
@@ -63,7 +65,7 @@ export default function OtpScreen() {
 
   const otpValue = otp.join("");
   const isComplete = otpValue.length === OTP_LENGTH;
-  const isGoogleMode = mode === "google";
+  const isGoogleMode = paramMode === "google";
 
   useEffect(() => {
     if (canResend) return;
@@ -113,7 +115,7 @@ export default function OtpScreen() {
       console.log('VERIFY RESPONSE:', JSON.stringify(response));
 
       if (response.type !== 'success') {
-        Alert.alert("Invalid Code", "The OTP you entered is incorrect or expired.");
+        AppAlert.show("Invalid Code", "The OTP you entered is incorrect or expired.");
         setVerifying(false);
         return;
       }
@@ -122,7 +124,7 @@ export default function OtpScreen() {
         const tokens = getPendingGoogleTokens();
         if (!tokens) {
           setVerifying(false);
-          Alert.alert("Session Expired", "Please sign in with Google again.");
+          AppAlert.show("Session Expired", "Please sign in with Google again.");
           router.replace('/welcome');
           return;
         }
@@ -135,7 +137,7 @@ export default function OtpScreen() {
 
         if (setError || !setData?.session?.user) {
           setVerifying(false);
-          Alert.alert("Session Expired", "Please sign in with Google again.");
+          AppAlert.show("Session Expired", "Please sign in with Google again.");
           router.replace('/welcome');
           return;
         }
@@ -216,7 +218,7 @@ export default function OtpScreen() {
       }
     } catch (err) {
       setVerifying(false);
-      Alert.alert("Error", "Something went wrong verifying the OTP.");
+      AppAlert.show("Error", "Something went wrong verifying the OTP.");
     }
   };
 
@@ -237,23 +239,23 @@ export default function OtpScreen() {
       if (response.type === 'success') {
         setCurrentReqId(response.message);
       } else {
-        Alert.alert("Error", "Could not resend OTP. Please try again.");
+        AppAlert.show("Error", "Could not resend OTP. Please try again.");
       }
     } catch (err) {
-      Alert.alert("Error", "Could not resend OTP. Please try again.");
+      AppAlert.show("Error", "Could not resend OTP. Please try again.");
     }
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
 
       <LinearGradient
-        colors={["#0f172a", "#020617", "#0a0f1a"]}
+        colors={colors.bgGradient}
         style={StyleSheet.absoluteFill}
       />
-      <View style={styles.glowGreen} />
-      <View style={styles.glowBlue} />
+      <View style={[styles.glowGreen, { backgroundColor: colors.glowGreenBg }]} />
+      <View style={[styles.glowBlue, { backgroundColor: colors.glowBlueBg }]} />
 
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
@@ -263,17 +265,17 @@ export default function OtpScreen() {
           {/* Back button */}
           <View style={styles.header}>
             <Pressable
-              style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
               onPress={() => router.back()}
             >
-              <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
             </Pressable>
           </View>
 
           <View style={styles.content}>
             {/* Title */}
-            <Text style={styles.title}>{isGoogleMode ? "Verify Email" : "Verify Phone"}</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>{isGoogleMode ? "Verify Email" : "Verify Phone"}</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               We sent a 6-digit code to {isGoogleMode ? maskEmail(String(email)) : maskPhone(String(phone))}
             </Text>
 
@@ -287,7 +289,8 @@ export default function OtpScreen() {
                   }}
                   style={[
                     styles.otpBox,
-                    digit ? styles.otpBoxFilled : null,
+                    { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary },
+                    digit && { borderColor: colors.green, backgroundColor: colors.green + '14' },
                   ]}
                   value={digit}
                   onChangeText={(text) => handleChange(text, index)}
@@ -315,7 +318,7 @@ export default function OtpScreen() {
               <LinearGradient
                 colors={
                   isComplete
-                    ? ["#22c55e", "#16a34a"]
+                    ? [colors.green, colors.greenDark]
                     : ["#334155", "#1e293b"]
                 }
                 start={{ x: 0, y: 0 }}
@@ -330,12 +333,12 @@ export default function OtpScreen() {
             <View style={styles.resendRow}>
               {canResend ? (
                 <Pressable onPress={handleResend}>
-                  <Text style={styles.resendLink}>Resend OTP</Text>
+                  <Text style={[styles.resendLink, { color: colors.green }]}>Resend OTP</Text>
                 </Pressable>
               ) : (
-                <Text style={styles.resendTimer}>
+                <Text style={[styles.resendTimer, { color: colors.textMuted }]}>
                   Resend OTP in{" "}
-                  <Text style={styles.resendTimerBold}>{countdown}s</Text>
+                  <Text style={[styles.resendTimerBold, { color: colors.textSecondary }]}>{countdown}s</Text>
                 </Text>
               )}
             </View>
@@ -347,133 +350,25 @@ export default function OtpScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  flex: {
-    flex: 1,
-  },
-  glowGreen: {
-    position: "absolute",
-    top: -80,
-    right: -50,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "rgba(34, 197, 94, 0.1)",
-  },
-  glowBlue: {
-    position: "absolute",
-    bottom: 80,
-    left: -70,
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: "rgba(59, 130, 246, 0.08)",
-  },
-  safe: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "rgba(30, 41, 59, 0.8)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 32,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#f8fafc",
-    letterSpacing: -0.8,
-  },
-  subtitle: {
-    marginTop: 10,
-    fontSize: 16,
-    color: "#94a3b8",
-    fontWeight: "500",
-    lineHeight: 24,
-  },
-  otpRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 40,
-    marginBottom: 32,
-    gap: 8,
-  },
-  otpBox: {
-    flex: 1,
-    maxWidth: 52,
-    height: 56,
-    backgroundColor: "rgba(30, 41, 59, 0.7)",
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#1e293b",
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#f8fafc",
-    textAlign: "center",
-  },
-  otpBoxFilled: {
-    borderColor: "#22c55e",
-    backgroundColor: "rgba(34, 197, 94, 0.08)",
-  },
-  verifyBtnWrap: {
-    borderRadius: 14,
-    overflow: "hidden",
-    shadowColor: "#22c55e",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  verifyBtnDisabled: {
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  verifyBtn: {
-    paddingVertical: 16,
-    alignItems: "center",
-    borderRadius: 14,
-  },
-  verifyBtnText: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-  resendRow: {
-    marginTop: 28,
-    alignItems: "center",
-  },
-  resendLink: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#22c55e",
-  },
-  resendTimer: {
-    fontSize: 15,
-    color: "#64748b",
-    fontWeight: "500",
-  },
-  resendTimerBold: {
-    color: "#94a3b8",
-    fontWeight: "700",
-  },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
+  root: { flex: 1 },
+  flex: { flex: 1 },
+  glowGreen: { position: "absolute", top: -80, right: -50, width: 260, height: 260, borderRadius: 130 },
+  glowBlue: { position: "absolute", bottom: 80, left: -70, width: 280, height: 280, borderRadius: 140 },
+  safe: { flex: 1 },
+  header: { paddingHorizontal: 16, paddingTop: 8 },
+  backBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  content: { flex: 1, paddingHorizontal: 24, paddingTop: 32 },
+  title: { fontSize: 32, fontWeight: "800", letterSpacing: -0.8 },
+  subtitle: { marginTop: 10, fontSize: 16, fontWeight: "500", lineHeight: 24 },
+  otpRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 40, marginBottom: 32, gap: 8 },
+  otpBox: { flex: 1, maxWidth: 52, height: 56, borderRadius: 14, borderWidth: 1.5, fontSize: 24, fontWeight: "700", textAlign: "center" },
+  verifyBtnWrap: { borderRadius: 14, overflow: "hidden", shadowColor: "#22c55e", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6 },
+  verifyBtnDisabled: { shadowOpacity: 0, elevation: 0 },
+  verifyBtn: { paddingVertical: 16, alignItems: "center", borderRadius: 14 },
+  verifyBtnText: { fontSize: 17, fontWeight: "700", color: "#ffffff" },
+  resendRow: { marginTop: 28, alignItems: "center" },
+  resendLink: { fontSize: 15, fontWeight: "700" },
+  resendTimer: { fontSize: 15, fontWeight: "500" },
+  resendTimerBold: { fontWeight: "700" },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
 });

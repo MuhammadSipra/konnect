@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Modal,
+  ActivityIndicator, Modal,
   Pressable,
   ScrollView,
   StatusBar,
@@ -13,7 +13,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AppAlert } from '../lib/AppAlert';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../lib/ThemeContext';
 
 const CLIENT_CANCEL_REASONS = [
   "Project no longer needed",
@@ -26,6 +28,7 @@ const CLIENT_CANCEL_REASONS = [
 export default function ProjectDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const { colors, mode } = useTheme();
 
   const [project, setProject] = useState<any>(null);
   const [bids, setBids] = useState<any[]>([]);
@@ -163,7 +166,7 @@ export default function ProjectDetailScreen() {
 
   const submitReview = async () => {
     if (!ratingModalBid || selectedRating === 0) {
-      Alert.alert("Select a rating", "Please tap a star rating before submitting.");
+      AppAlert.show("Select a rating", "Please tap a star rating before submitting.");
       return;
     }
 
@@ -183,10 +186,10 @@ export default function ProjectDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.root}>
-        <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
+      <View style={[styles.root, { backgroundColor: colors.bg }]}>
+        <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
         <SafeAreaView style={styles.centerWrap}>
-          <ActivityIndicator size="large" color="#3b82f6" />
+          <ActivityIndicator size="large" color={colors.blue} />
         </SafeAreaView>
       </View>
     );
@@ -194,10 +197,10 @@ export default function ProjectDetailScreen() {
 
   if (!project) {
     return (
-      <View style={styles.root}>
-        <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
+      <View style={[styles.root, { backgroundColor: colors.bg }]}>
+        <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
         <SafeAreaView style={styles.centerWrap}>
-          <Text style={styles.emptyText}>Project not found</Text>
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>Project not found</Text>
         </SafeAreaView>
       </View>
     );
@@ -212,63 +215,63 @@ export default function ProjectDetailScreen() {
   );
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
-      <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
+      <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
-          <Pressable style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+          <Pressable style={({ pressed }) => [styles.iconBtn, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Project Details</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Project Details</Text>
           <View style={styles.iconBtn} />
         </View>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.cardTop}>
-              <View style={styles.categoryBadge}>
-                <Text style={styles.categoryText}>{project.category}</Text>
+              <View style={[styles.categoryBadge, { backgroundColor: colors.gold + '26', borderColor: colors.gold + '4D' }]}>
+                <Text style={[styles.categoryText, { color: colors.gold }]}>{project.category}</Text>
               </View>
-              <Text style={styles.postedTime}>
+              <Text style={[styles.postedTime, { color: colors.textMuted }]}>
                 Posted {new Date(project.created_at).toLocaleDateString()}
               </Text>
             </View>
-            <Text style={styles.projectTitle}>{project.title}</Text>
+            <Text style={[styles.projectTitle, { color: colors.textPrimary }]}>{project.title}</Text>
 
             {project.confirmation_code ? (
-              <View style={styles.codeBox}>
-                <Ionicons name="key-outline" size={14} color="#fbbf24" />
-                <Text style={styles.codeText}>Confirmation Code: {project.confirmation_code}</Text>
+              <View style={[styles.codeBox, { backgroundColor: colors.gold + '1A', borderColor: colors.gold + '4D' }]}>
+                <Ionicons name="key-outline" size={14} color={colors.gold} />
+                <Text style={[styles.codeText, { color: colors.gold }]}>Confirmation Code: {project.confirmation_code}</Text>
               </View>
             ) : null}
 
             <View style={styles.infoRow}>
-              <Ionicons name="location-outline" size={16} color="#64748b" />
-              <Text style={styles.infoText}>{project.location}</Text>
+              <Ionicons name="location-outline" size={16} color={colors.textMuted} />
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}>{project.location}</Text>
             </View>
             <View style={styles.infoRow}>
-              <Ionicons name="time-outline" size={16} color="#64748b" />
-              <Text style={styles.infoText}>Timeline: {project.timeline}</Text>
+              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}>Timeline: {project.timeline}</Text>
             </View>
             <View style={styles.infoRow}>
-              <Ionicons name="wallet-outline" size={16} color="#64748b" />
-              <Text style={styles.infoText}>Budget: {project.budget}</Text>
+              <Ionicons name="wallet-outline" size={16} color={colors.textMuted} />
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}>Budget: {project.budget}</Text>
             </View>
           </View>
 
-          <Text style={styles.sectionTitle}>Description</Text>
-          <View style={styles.card}>
-            <Text style={styles.description}>{project.description}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Description</Text>
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.description, { color: colors.textSecondary }]}>{project.description}</Text>
           </View>
 
           <View style={styles.bidsHeader}>
-            <Text style={styles.sectionTitle}>Bids Received</Text>
-            <Text style={styles.bidsCount}>{visibleBids.length} bids</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Bids Received</Text>
+            <Text style={[styles.bidsCount, { color: colors.textMuted }]}>{visibleBids.length} bids</Text>
           </View>
 
           {visibleBids.length === 0 ? (
-            <View style={styles.card}>
-              <Text style={styles.description}>No bids yet. Check back soon.</Text>
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.description, { color: colors.textSecondary }]}>No bids yet. Check back soon.</Text>
             </View>
           ) : (
             visibleBids.map((bid) => {
@@ -279,58 +282,58 @@ export default function ProjectDetailScreen() {
               const isCompleted = bid.status === 'completed';
 
               return (
-                <View key={bid.id} style={styles.bidCard}>
-                  <LinearGradient colors={["#3b82f6", "#2563eb"]} style={styles.bidAvatar}>
+                <View key={bid.id} style={[styles.bidCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <LinearGradient colors={[colors.blue, colors.blueDark]} style={styles.bidAvatar}>
                     <Text style={styles.bidAvatarText}>{initials}</Text>
                   </LinearGradient>
                   <View style={styles.bidBody}>
-                    <Text style={styles.bidName}>{name}</Text>
-                    <Text style={styles.bidSkill}>{bid.profile?.skill || ''}</Text>
-                    {bid.message ? <Text style={styles.bidMessage}>{bid.message}</Text> : null}
+                    <Text style={[styles.bidName, { color: colors.textPrimary }]}>{name}</Text>
+                    <Text style={[styles.bidSkill, { color: colors.textSecondary }]}>{bid.profile?.skill || ''}</Text>
+                    {bid.message ? <Text style={[styles.bidMessage, { color: colors.textMuted }]}>{bid.message}</Text> : null}
                   </View>
                   <View style={styles.bidRight}>
-                    <Text style={styles.bidAmount}>
+                    <Text style={[styles.bidAmount, { color: colors.green }]}>
                       {bid.amount ? `₹${bid.amount}` : 'No quote'}
                     </Text>
                     {isCompleted ? (
-                      <View style={styles.acceptedBadge}>
-                        <Text style={styles.acceptedBadgeText}>Completed</Text>
+                      <View style={[styles.acceptedBadge, { backgroundColor: colors.green + '26', borderColor: colors.green + '59' }]}>
+                        <Text style={[styles.acceptedBadgeText, { color: colors.green }]}>Completed</Text>
                       </View>
                     ) : isConfirmed ? (
                       <View style={{ alignItems: "flex-end", gap: 6 }}>
-                        <View style={styles.acceptedBadge}>
-                          <Text style={styles.acceptedBadgeText}>Confirmed</Text>
+                        <View style={[styles.acceptedBadge, { backgroundColor: colors.green + '26', borderColor: colors.green + '59' }]}>
+                          <Text style={[styles.acceptedBadgeText, { color: colors.green }]}>Confirmed</Text>
                         </View>
                         <Pressable
                           style={styles.messageBtn}
                           onPress={() => router.replace(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=client` as never)}
                         >
-                          <Ionicons name="chatbubble-outline" size={13} color="#3b82f6" />
-                          <Text style={styles.messageBtnText}>Message</Text>
+                          <Ionicons name="chatbubble-outline" size={13} color={colors.blue} />
+                          <Text style={[styles.messageBtnText, { color: colors.blue }]}>Message</Text>
                         </Pressable>
                         <Pressable onPress={() => handleMarkComplete(bid)}>
-                          <Text style={styles.completeLink}>Mark Complete</Text>
+                          <Text style={[styles.completeLink, { color: colors.green }]}>Mark Complete</Text>
                         </Pressable>
                         <Pressable onPress={() => handleCancelConfirmed(bid.id)}>
-                          <Text style={styles.cancelLink}>Cancel</Text>
+                          <Text style={[styles.cancelLink, { color: colors.red }]}>Cancel</Text>
                         </Pressable>
                       </View>
                     ) : isLocked ? (
                       <View style={{ alignItems: "flex-end", gap: 6 }}>
-                        <View style={styles.acceptedBadge}>
-                          <Text style={styles.acceptedBadgeText}>Locked</Text>
+                        <View style={[styles.acceptedBadge, { backgroundColor: colors.green + '26', borderColor: colors.green + '59' }]}>
+                          <Text style={[styles.acceptedBadgeText, { color: colors.green }]}>Locked</Text>
                         </View>
                         <Pressable
                           style={styles.messageBtn}
                           onPress={() => router.replace(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=client` as never)}
                         >
-                          <Ionicons name="chatbubble-outline" size={13} color="#3b82f6" />
-                          <Text style={styles.messageBtnText}>Message</Text>
+                          <Ionicons name="chatbubble-outline" size={13} color={colors.blue} />
+                          <Text style={[styles.messageBtnText, { color: colors.blue }]}>Message</Text>
                         </Pressable>
                       </View>
                     ) : (
                       <Pressable
-                        style={({ pressed }) => [styles.acceptBtn, pressed && styles.pressed]}
+                        style={({ pressed }) => [styles.acceptBtn, { backgroundColor: colors.blueDark }, pressed && styles.pressed]}
                         onPress={() => handleLock(bid.id)}
                       >
                         <Text style={styles.acceptBtnText}>Lock</Text>
@@ -347,31 +350,31 @@ export default function ProjectDetailScreen() {
 
       <Modal visible={ratingModalBid !== null} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Rate this Contractor</Text>
+          <View style={[styles.modalCard, { backgroundColor: colors.surfaceSolid, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Rate this Contractor</Text>
             <View style={{ flexDirection: "row", justifyContent: "center", gap: 8, marginVertical: 16 }}>
               {[1, 2, 3, 4, 5].map((star) => (
                 <Pressable key={star} onPress={() => setSelectedRating(star)}>
                   <Ionicons
                     name={star <= selectedRating ? "star" : "star-outline"}
                     size={32}
-                    color="#fbbf24"
+                    color={colors.gold}
                   />
                 </Pressable>
               ))}
             </View>
             <TextInput
-              style={styles.modalOtpInput}
+              style={[styles.modalOtpInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
               placeholder="Optional comment"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               value={comment}
               onChangeText={setComment}
             />
             <View style={styles.modalBtnRow}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setRatingModalBid(null)}>
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              <Pressable style={[styles.modalCancelBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => setRatingModalBid(null)}>
+                <Text style={[styles.modalCancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
               </Pressable>
-              <Pressable style={styles.modalConfirmBtn} onPress={submitReview}>
+              <Pressable style={[styles.modalConfirmBtn, { backgroundColor: colors.green }]} onPress={submitReview}>
                 <Text style={styles.modalConfirmBtnText}>Submit</Text>
               </Pressable>
             </View>
@@ -381,21 +384,21 @@ export default function ProjectDetailScreen() {
 
       <Modal visible={cancelReasonBidId !== null} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Why are you cancelling?</Text>
+          <View style={[styles.modalCard, { backgroundColor: colors.surfaceSolid, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Why are you cancelling?</Text>
             <View style={{ marginTop: 16, gap: 10 }}>
               {CLIENT_CANCEL_REASONS.map((reason) => (
                 <Pressable
                   key={reason}
-                  style={styles.reasonOption}
+                  style={[styles.reasonOption, { backgroundColor: colors.surface, borderColor: colors.border }]}
                   onPress={() => submitClientCancellation(reason)}
                 >
-                  <Text style={styles.reasonOptionText}>{reason}</Text>
+                  <Text style={[styles.reasonOptionText, { color: colors.textPrimary }]}>{reason}</Text>
                 </Pressable>
               ))}
             </View>
             <Pressable style={styles.modalDismissBtn} onPress={() => setCancelReasonBidId(null)}>
-              <Text style={styles.modalDismissBtnText}>Never mind</Text>
+              <Text style={[styles.modalDismissBtnText, { color: colors.textMuted }]}>Never mind</Text>
             </Pressable>
           </View>
         </View>
@@ -405,111 +408,68 @@ export default function ProjectDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#020617" },
+  root: { flex: 1 },
   safe: { flex: 1 },
   centerWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
-  emptyText: { fontSize: 15, color: "#64748b", fontWeight: "500" },
+  emptyText: { fontSize: 15, fontWeight: "500" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
-  iconBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(30,41,59,0.8)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#1e293b" },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: "#f8fafc" },
+  iconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  headerTitle: { fontSize: 18, fontWeight: "700" },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
-  card: { backgroundColor: "rgba(30,41,59,0.6)", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#1e293b", marginBottom: 20 },
+  card: { borderRadius: 16, padding: 16, borderWidth: 1, marginBottom: 20 },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  categoryBadge: { backgroundColor: "rgba(251,191,36,0.15)", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1, borderColor: "rgba(251,191,36,0.3)" },
-  categoryText: { fontSize: 13, fontWeight: "600", color: "#fbbf24" },
-  postedTime: { fontSize: 12, color: "#64748b" },
-  projectTitle: { fontSize: 22, fontWeight: "800", color: "#f8fafc", letterSpacing: -0.5, marginBottom: 10 },
+  categoryBadge: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4, borderWidth: 1 },
+  categoryText: { fontSize: 13, fontWeight: "600" },
+  postedTime: { fontSize: 12 },
+  projectTitle: { fontSize: 22, fontWeight: "800", letterSpacing: -0.5, marginBottom: 10 },
   codeBox: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(251, 191, 36, 0.1)",
     borderWidth: 1,
-    borderColor: "rgba(251, 191, 36, 0.3)",
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
     marginBottom: 12,
     alignSelf: "flex-start",
   },
-  codeText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#fbbf24",
-  },
+  codeText: { fontSize: 13, fontWeight: "700" },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
-  infoText: { fontSize: 14, color: "#94a3b8", fontWeight: "500" },
-  sectionTitle: { fontSize: 17, fontWeight: "700", color: "#f1f5f9", marginBottom: 12 },
-  description: { fontSize: 15, color: "#94a3b8", lineHeight: 24 },
+  infoText: { fontSize: 14, fontWeight: "500" },
+  sectionTitle: { fontSize: 17, fontWeight: "700", marginBottom: 12 },
+  description: { fontSize: 15, lineHeight: 24 },
   bidsHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  bidsCount: { fontSize: 14, color: "#64748b", fontWeight: "500" },
-  bidCard: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(30,41,59,0.6)", borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: "#1e293b", gap: 12 },
+  bidsCount: { fontSize: 14, fontWeight: "500" },
+  bidCard: { flexDirection: "row", alignItems: "center", borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, gap: 12 },
   bidAvatar: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
   bidAvatarText: { fontSize: 16, fontWeight: "800", color: "#fff" },
   bidBody: { flex: 1 },
-  bidName: { fontSize: 15, fontWeight: "700", color: "#f8fafc" },
-  bidSkill: { fontSize: 13, color: "#94a3b8", marginTop: 2 },
-  bidMessage: { fontSize: 12, color: "#64748b", marginTop: 4 },
+  bidName: { fontSize: 15, fontWeight: "700" },
+  bidSkill: { fontSize: 13, marginTop: 2 },
+  bidMessage: { fontSize: 12, marginTop: 4 },
   bidRight: { alignItems: "flex-end", gap: 6 },
-  bidAmount: { fontSize: 15, fontWeight: "700", color: "#22c55e" },
-  acceptBtn: { backgroundColor: "#2563eb", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
+  bidAmount: { fontSize: 15, fontWeight: "700" },
+  acceptBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
   acceptBtnText: { fontSize: 12, fontWeight: "700", color: "#fff" },
-  acceptedBadge: { backgroundColor: "rgba(34,197,94,0.15)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: "rgba(34,197,94,0.35)" },
-  acceptedBadgeText: { fontSize: 12, fontWeight: "700", color: "#22c55e" },
-  cancelLink: {
-    fontSize: 11,
-    color: "#ef4444",
-    fontWeight: "600",
-  },
-  completeLink: {
-    fontSize: 11,
-    color: "#22c55e",
-    fontWeight: "600",
-  },
-  messageBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  messageBtnText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#3b82f6",
-  },
+  acceptedBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  acceptedBadgeText: { fontSize: 12, fontWeight: "700" },
+  cancelLink: { fontSize: 11, fontWeight: "600" },
+  completeLink: { fontSize: 11, fontWeight: "600" },
+  messageBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 4 },
+  messageBtnText: { fontSize: 12, fontWeight: "600" },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
-  modalCard: { width: "100%", backgroundColor: "#0f172a", borderRadius: 20, padding: 24, borderWidth: 1, borderColor: "#1e293b" },
-  modalTitle: { fontSize: 18, fontWeight: "700", color: "#f8fafc", textAlign: "center" },
-  modalOtpInput: { backgroundColor: "rgba(30,41,59,0.7)", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: "#f8fafc", borderWidth: 1, borderColor: "#1e293b", marginBottom: 16 },
+  modalCard: { width: "100%", borderRadius: 20, padding: 24, borderWidth: 1 },
+  modalTitle: { fontSize: 18, fontWeight: "700", textAlign: "center" },
+  modalOtpInput: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, borderWidth: 1, marginBottom: 16 },
   modalBtnRow: { flexDirection: "row", gap: 12 },
-  modalCancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "rgba(30,41,59,0.7)", borderWidth: 1, borderColor: "#1e293b" },
-  modalCancelBtnText: { fontSize: 14, fontWeight: "600", color: "#94a3b8" },
-  modalConfirmBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#22c55e" },
+  modalCancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", borderWidth: 1 },
+  modalCancelBtnText: { fontSize: 14, fontWeight: "600" },
+  modalConfirmBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center" },
   modalConfirmBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-  reasonOption: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: "rgba(30,41,59,0.7)",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  reasonOptionText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#f8fafc",
-  },
-  modalDismissBtn: {
-    marginTop: 16,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  modalDismissBtnText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#64748b",
-  },
+  reasonOption: { paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1 },
+  reasonOptionText: { fontSize: 14, fontWeight: "600" },
+  modalDismissBtn: { marginTop: 16, paddingVertical: 12, alignItems: "center" },
+  modalDismissBtnText: { fontSize: 14, fontWeight: "600" },
 });

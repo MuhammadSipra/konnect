@@ -5,7 +5,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     Dimensions,
     Image,
     Pressable,
@@ -16,8 +15,10 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AppAlert } from '../lib/AppAlert';
 import { getCurrentProfileId, getCurrentRole } from '../lib/currentProfile';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../lib/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_ITEM_SIZE = (SCREEN_WIDTH - 40 - 12) / 2;
@@ -25,6 +26,7 @@ const GRID_ITEM_SIZE = (SCREEN_WIDTH - 40 - 12) / 2;
 export default function PortfolioAllScreen() {
   const router = useRouter();
   const { contractorId } = useLocalSearchParams<{ contractorId?: string }>();
+  const { colors, mode } = useTheme();
 
   const [photos, setPhotos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,14 +60,14 @@ export default function PortfolioAllScreen() {
     if (source === 'camera') {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert("Permission needed", "Please allow camera access to take a photo.");
+        AppAlert.show("Permission needed", "Please allow camera access to take a photo.");
         return;
       }
       result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
     } else {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert("Permission needed", "Please allow photo access to upload portfolio photos.");
+        AppAlert.show("Permission needed", "Please allow photo access to upload portfolio photos.");
         return;
       }
       result = await ImagePicker.launchImageLibraryAsync({
@@ -90,7 +92,7 @@ export default function PortfolioAllScreen() {
         .upload(fileName, arrayBuffer, { contentType: blob.type || 'image/jpeg' });
 
       if (uploadError) {
-        Alert.alert("Upload Error", uploadError.message);
+        AppAlert.show("Upload Error", uploadError.message);
         setUploading(false);
         return;
       }
@@ -104,14 +106,14 @@ export default function PortfolioAllScreen() {
 
       await loadPhotos();
     } catch (err) {
-      Alert.alert("Error", "Could not upload photo.");
+      AppAlert.show("Error", "Could not upload photo.");
     } finally {
       setUploading(false);
     }
   };
 
   const handleAddPhoto = () => {
-    Alert.alert("Add Photo", "Choose a source", [
+    AppAlert.show("Add Photo", "Choose a source", [
       { text: "Camera", onPress: () => pickAndUpload('camera') },
       { text: "Gallery", onPress: () => pickAndUpload('gallery') },
       { text: "Cancel", style: "cancel" },
@@ -119,7 +121,7 @@ export default function PortfolioAllScreen() {
   };
 
   const handleDelete = (photo: any) => {
-    Alert.alert("Delete Photo", "Remove this photo from your portfolio?", [
+    AppAlert.show("Delete Photo", "Remove this photo from your portfolio?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -133,28 +135,28 @@ export default function PortfolioAllScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
-      <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
+      <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
-          <Pressable style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+          <Pressable style={({ pressed }) => [styles.iconBtn, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Portfolio</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Portfolio</Text>
           <View style={styles.iconBtn} />
         </View>
 
         {loading ? (
           <View style={styles.centerWrap}>
-            <ActivityIndicator size="large" color="#22c55e" />
+            <ActivityIndicator size="large" color={colors.green} />
           </View>
         ) : (
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {photos.length === 0 ? (
               <View style={styles.centerWrap}>
-                <Ionicons name="images-outline" size={40} color="#475569" />
-                <Text style={styles.emptyText}>No portfolio photos yet.</Text>
+                <Ionicons name="images-outline" size={40} color={colors.textMuted} />
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No portfolio photos yet.</Text>
               </View>
             ) : (
               <View style={styles.grid}>
@@ -162,7 +164,7 @@ export default function PortfolioAllScreen() {
                   <Pressable
                     key={photo.id}
                     onLongPress={() => isOwner && handleDelete(photo)}
-                    style={[styles.gridItemWrap, { width: GRID_ITEM_SIZE, height: GRID_ITEM_SIZE }]}
+                    style={[styles.gridItemWrap, { width: GRID_ITEM_SIZE, height: GRID_ITEM_SIZE, backgroundColor: colors.surfaceSolid }]}
                   >
                     <Image source={{ uri: photo.photo_url }} style={styles.gridItem} />
                     {isOwner && (
@@ -179,9 +181,9 @@ export default function PortfolioAllScreen() {
         )}
 
         {isOwner && (
-          <View style={styles.uploadBarWrap}>
+          <View style={[styles.uploadBarWrap, { backgroundColor: colors.surfaceSolid, borderTopColor: colors.border }]}>
             <SafeAreaView edges={["bottom"]}>
-              <Pressable style={({ pressed }) => [styles.uploadBtn, pressed && styles.pressed]} onPress={handleAddPhoto} disabled={uploading}>
+              <Pressable style={({ pressed }) => [styles.uploadBtn, { backgroundColor: colors.green }, pressed && styles.pressed]} onPress={handleAddPhoto} disabled={uploading}>
                 {uploading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
@@ -200,17 +202,17 @@ export default function PortfolioAllScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#020617" },
+  root: { flex: 1 },
   safe: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
-  iconBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(30,41,59,0.8)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#1e293b" },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: "#f8fafc" },
+  iconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  headerTitle: { fontSize: 18, fontWeight: "700" },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
   centerWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingTop: 80 },
-  emptyText: { fontSize: 15, color: "#64748b", fontWeight: "500" },
+  emptyText: { fontSize: 15, fontWeight: "500" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  gridItemWrap: { borderRadius: 14, overflow: "hidden", backgroundColor: "#1e293b" },
+  gridItemWrap: { borderRadius: 14, overflow: "hidden" },
   gridItem: { width: "100%", height: "100%" },
   deleteBadge: {
     position: "absolute",
@@ -230,16 +232,13 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 20,
     paddingTop: 12,
-    backgroundColor: "rgba(15,23,42,0.95)",
     borderTopWidth: 1,
-    borderTopColor: "#1e293b",
   },
   uploadBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    backgroundColor: "#22c55e",
     borderRadius: 16,
     paddingVertical: 16,
     marginBottom: 8,

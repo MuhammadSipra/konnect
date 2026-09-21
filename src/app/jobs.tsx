@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getCurrentProfileId } from '../lib/currentProfile';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../lib/ThemeContext';
 
 type TabKey = "active" | "completed" | "pending";
 
@@ -51,6 +52,7 @@ async function resolveContractorId(): Promise<number | null> {
 
 export default function JobsScreen() {
   const router = useRouter();
+  const { colors, mode } = useTheme();
   const [activeTab, setActiveTab] = useState<TabKey>("active");
   const [loading, setLoading] = useState(true);
 
@@ -117,20 +119,17 @@ export default function JobsScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
 
-      <LinearGradient
-        colors={["#0f172a", "#020617", "#0a0f1a"]}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.glowGreen} />
-      <View style={styles.glowBlue} />
+      <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
+      <View style={[styles.glowGreen, { backgroundColor: colors.glowGreenBg }]} />
+      <View style={[styles.glowBlue, { backgroundColor: colors.glowBlueBg }]} />
 
       <SafeAreaView style={styles.safe} edges={["top"]}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Jobs</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Jobs</Text>
         </View>
 
         {/* Top tabs */}
@@ -140,10 +139,14 @@ export default function JobsScreen() {
             return (
               <Pressable
                 key={tab.key}
-                style={[styles.tabPill, selected && styles.tabPillActive]}
+                style={[
+                  styles.tabPill,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  selected && { backgroundColor: colors.green + '26', borderColor: colors.green + '66' },
+                ]}
                 onPress={() => setActiveTab(tab.key)}
               >
-                <Text style={[styles.tabPillText, selected && styles.tabPillTextActive]}>
+                <Text style={[styles.tabPillText, { color: colors.textMuted }, selected && { color: colors.green }]}>
                   {tab.label}
                 </Text>
               </Pressable>
@@ -153,7 +156,7 @@ export default function JobsScreen() {
 
         {loading ? (
           <View style={styles.centerWrap}>
-            <ActivityIndicator size="large" color="#22c55e" />
+            <ActivityIndicator size="large" color={colors.green} />
           </View>
         ) : (
           <ScrollView
@@ -168,18 +171,18 @@ export default function JobsScreen() {
                 activeJobs.map((job) => (
                   <Pressable
                     key={job.id}
-                    style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
                     onPress={() => router.push(`/project-detail?id=${job.project.id}` as never)}
                   >
-                    <Text style={styles.cardTitle}>{job.project.title}</Text>
+                    <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{job.project.title}</Text>
                     <View style={styles.cardRow}>
-                      <Ionicons name="location-outline" size={14} color="#64748b" />
-                      <Text style={styles.cardDetail}>{job.project.location}</Text>
+                      <Ionicons name="location-outline" size={14} color={colors.textMuted} />
+                      <Text style={[styles.cardDetail, { color: colors.textMuted }]}>{job.project.location}</Text>
                     </View>
-                    <Text style={styles.cardBudget}>{job.project.budget}</Text>
+                    <Text style={[styles.cardBudget, { color: colors.green }]}>{job.project.budget}</Text>
                     <View style={styles.statusRow}>
-                      <View style={styles.statusBadge}>
-                        <Text style={styles.statusBadgeText}>
+                      <View style={[styles.statusBadge, { backgroundColor: colors.green + '26', borderColor: colors.green + '59' }]}>
+                        <Text style={[styles.statusBadgeText, { color: colors.green }]}>
                           {job.status === 'confirmed' ? 'In Progress' : 'Confirmed'}
                         </Text>
                       </View>
@@ -196,31 +199,31 @@ export default function JobsScreen() {
                 completedJobs.map((job) => (
                   <Pressable
                     key={job.id}
-                    style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
                     onPress={() => router.push(`/project-detail?id=${job.project.id}` as never)}
                   >
                     <View style={styles.cardTop}>
-                      <Text style={styles.cardTitle}>{job.project.title}</Text>
-                      <View style={styles.completedBadge}>
-                        <Text style={styles.completedBadgeText}>Completed</Text>
+                      <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{job.project.title}</Text>
+                      <View style={[styles.completedBadge, { backgroundColor: colors.blue + '26', borderColor: colors.blue + '59' }]}>
+                        <Text style={[styles.completedBadgeText, { color: colors.blue }]}>Completed</Text>
                       </View>
                     </View>
                     <View style={styles.cardRow}>
-                      <Ionicons name="location-outline" size={14} color="#64748b" />
-                      <Text style={styles.cardDetail}>{job.project.location}</Text>
+                      <Ionicons name="location-outline" size={14} color={colors.textMuted} />
+                      <Text style={[styles.cardDetail, { color: colors.textMuted }]}>{job.project.location}</Text>
                     </View>
-                    <Text style={styles.cardBudget}>{job.project.budget}</Text>
-                    <Text style={styles.completedDate}>
+                    <Text style={[styles.cardBudget, { color: colors.green }]}>{job.project.budget}</Text>
+                    <Text style={[styles.completedDate, { color: colors.textMuted }]}>
                       Finished on {new Date(job.created_at).toLocaleDateString()}
                     </Text>
                     {job.review ? (
-                      <View style={styles.ratingRow}>
-                        <Ionicons name="star" size={16} color="#fbbf24" />
-                        <Text style={styles.ratingText}>{job.review.rating} rating received</Text>
+                      <View style={[styles.ratingRow, { borderTopColor: colors.border }]}>
+                        <Ionicons name="star" size={16} color={colors.gold} />
+                        <Text style={[styles.ratingText, { color: colors.gold }]}>{job.review.rating} rating received</Text>
                       </View>
                     ) : (
-                      <View style={styles.ratingRow}>
-                        <Text style={styles.noRatingText}>No rating yet</Text>
+                      <View style={[styles.ratingRow, { borderTopColor: colors.border }]}>
+                        <Text style={[styles.noRatingText, { color: colors.textMuted }]}>No rating yet</Text>
                       </View>
                     )}
                   </Pressable>
@@ -235,27 +238,27 @@ export default function JobsScreen() {
                 pendingJobs.map((job) => (
                   <Pressable
                     key={job.id}
-                    style={({ pressed }) => [styles.card, styles.pendingCard, pressed && styles.pressed]}
+                    style={({ pressed }) => [styles.card, styles.pendingCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
                     onPress={() => router.push('/contractor' as never)}
                   >
-                    <View style={styles.pendingAccent} />
+                    <View style={[styles.pendingAccent, { backgroundColor: colors.gold }]} />
                     <View style={styles.pendingContent}>
                       <View style={styles.cardTop}>
-                        <Text style={styles.cardTitle}>{job.project.title}</Text>
-                        <Text style={styles.pendingTime}>
+                        <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{job.project.title}</Text>
+                        <Text style={[styles.pendingTime, { color: colors.textMuted }]}>
                           {new Date(job.created_at).toLocaleDateString()}
                         </Text>
                       </View>
                       <View style={styles.cardRow}>
-                        <Ionicons name="location-outline" size={14} color="#64748b" />
-                        <Text style={styles.cardDetail}>{job.project.location}</Text>
+                        <Ionicons name="location-outline" size={14} color={colors.textMuted} />
+                        <Text style={[styles.cardDetail, { color: colors.textMuted }]}>{job.project.location}</Text>
                       </View>
-                      <Text style={styles.cardBudget}>{job.project.budget}</Text>
+                      <Text style={[styles.cardBudget, { color: colors.green }]}>{job.project.budget}</Text>
 
                       <View style={styles.pendingFooter}>
                         <View style={styles.waitingBadge}>
-                          <Ionicons name="time-outline" size={14} color="#fbbf24" />
-                          <Text style={styles.waitingText}>
+                          <Ionicons name="time-outline" size={14} color={colors.gold} />
+                          <Text style={[styles.waitingText, { color: colors.gold }]}>
                             {job.status === 'locked'
                               ? 'Client shortlisted you — enter code on Home'
                               : 'Waiting for client response'}
@@ -273,7 +276,7 @@ export default function JobsScreen() {
         )}
 
         {/* Bottom Tab Bar */}
-        <View style={styles.tabBarWrap}>
+        <View style={[styles.tabBarWrap, { backgroundColor: colors.surfaceSolid, borderTopColor: colors.border }]}>
           <SafeAreaView edges={["bottom"]}>
             <View style={styles.tabBar}>
               {BOTTOM_TABS.map((tab) => {
@@ -291,9 +294,9 @@ export default function JobsScreen() {
                           : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)
                       }
                       size={22}
-                      color={active ? "#22c55e" : "#64748b"}
+                      color={active ? colors.green : colors.textMuted}
                     />
-                    <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                    <Text style={[styles.tabLabel, { color: active ? colors.green : colors.textMuted }]}>
                       {tab.label}
                     </Text>
                   </Pressable>
@@ -308,258 +311,55 @@ export default function JobsScreen() {
 }
 
 function EmptyState({ text }: { text: string }) {
+  const { colors } = useTheme();
   return (
     <View style={styles.emptyWrap}>
-      <Ionicons name="briefcase-outline" size={40} color="#334155" />
-      <Text style={styles.emptyText}>{text}</Text>
+      <Ionicons name="briefcase-outline" size={40} color={colors.textMuted} />
+      <Text style={[styles.emptyText, { color: colors.textMuted }]}>{text}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  glowGreen: {
-    position: "absolute",
-    top: -60,
-    right: -40,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: "rgba(34, 197, 94, 0.1)",
-  },
-  glowBlue: {
-    position: "absolute",
-    bottom: 120,
-    left: -80,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "rgba(59, 130, 246, 0.08)",
-  },
-  safe: {
-    flex: 1,
-  },
-  centerWrap: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#f8fafc",
-    letterSpacing: -0.5,
-  },
-  tabRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
-  tabPill: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: "rgba(30, 41, 59, 0.6)",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    alignItems: "center",
-  },
-  tabPillActive: {
-    backgroundColor: "rgba(34, 197, 94, 0.15)",
-    borderColor: "rgba(34, 197, 94, 0.4)",
-  },
-  tabPillText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#64748b",
-  },
-  tabPillTextActive: {
-    color: "#22c55e",
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-  },
-  emptyWrap: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-    gap: 10,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#64748b",
-    fontWeight: "500",
-  },
-  card: {
-    backgroundColor: "rgba(30, 41, 59, 0.6)",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  pendingCard: {
-    flexDirection: "row",
-    overflow: "hidden",
-    padding: 0,
-  },
-  pendingAccent: {
-    width: 4,
-    backgroundColor: "#fbbf24",
-  },
-  pendingContent: {
-    flex: 1,
-    padding: 16,
-  },
-  cardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 8,
-  },
-  cardTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#f8fafc",
-  },
-  cardRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 8,
-  },
-  cardDetail: {
-    fontSize: 13,
-    color: "#64748b",
-  },
-  cardBudget: {
-    marginTop: 10,
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#22c55e",
-  },
-  statusRow: {
-    marginTop: 12,
-    flexDirection: "row",
-  },
-  statusBadge: {
-    backgroundColor: "rgba(34, 197, 94, 0.15)",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(34, 197, 94, 0.35)",
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#22c55e",
-    textTransform: "uppercase",
-  },
-  completedBadge: {
-    backgroundColor: "rgba(59, 130, 246, 0.15)",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(59, 130, 246, 0.35)",
-  },
-  completedBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#3b82f6",
-    textTransform: "uppercase",
-  },
-  completedDate: {
-    marginTop: 10,
-    fontSize: 13,
-    color: "#64748b",
-    fontWeight: "500",
-  },
-  ratingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#1e293b",
-  },
-  ratingText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#fbbf24",
-  },
-  noRatingText: {
-    fontSize: 13,
-    color: "#64748b",
-    fontWeight: "500",
-  },
-  pendingTime: {
-    fontSize: 12,
-    color: "#64748b",
-    fontWeight: "500",
-  },
-  pendingFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 14,
-    gap: 10,
-  },
-  waitingBadge: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  waitingText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#fbbf24",
-  },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  tabBarWrap: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(15, 23, 42, 0.95)",
-    borderTopWidth: 1,
-    borderTopColor: "#1e293b",
-  },
-  tabBar: {
-    flexDirection: "row",
-    paddingTop: 10,
-    paddingBottom: 6,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: "center",
-    gap: 4,
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#64748b",
-  },
-  tabLabelActive: {
-    color: "#22c55e",
-  },
+  root: { flex: 1 },
+  glowGreen: { position: "absolute", top: -60, right: -40, width: 220, height: 220, borderRadius: 110 },
+  glowBlue: { position: "absolute", bottom: 120, left: -80, width: 260, height: 260, borderRadius: 130 },
+  safe: { flex: 1 },
+  centerWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  header: { paddingHorizontal: 20, paddingVertical: 12 },
+  headerTitle: { fontSize: 28, fontWeight: "800", letterSpacing: -0.5 },
+  tabRow: { flexDirection: "row", gap: 8, paddingHorizontal: 20, marginBottom: 16 },
+  tabPill: { flex: 1, paddingVertical: 10, borderRadius: 12, borderWidth: 1, alignItems: "center" },
+  tabPillText: { fontSize: 14, fontWeight: "600" },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20 },
+  emptyWrap: { alignItems: "center", justifyContent: "center", paddingVertical: 60, gap: 10 },
+  emptyText: { fontSize: 14, fontWeight: "500" },
+  card: { borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1 },
+  pendingCard: { flexDirection: "row", overflow: "hidden", padding: 0 },
+  pendingAccent: { width: 4 },
+  pendingContent: { flex: 1, padding: 16 },
+  cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+  cardTitle: { flex: 1, fontSize: 16, fontWeight: "700" },
+  cardRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 },
+  cardDetail: { fontSize: 13 },
+  cardBudget: { marginTop: 10, fontSize: 16, fontWeight: "700" },
+  statusRow: { marginTop: 12, flexDirection: "row" },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1 },
+  statusBadgeText: { fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
+  completedBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1 },
+  completedBadgeText: { fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
+  completedDate: { marginTop: 10, fontSize: 13, fontWeight: "500" },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12, paddingTop: 12, borderTopWidth: 1 },
+  ratingText: { fontSize: 14, fontWeight: "600" },
+  noRatingText: { fontSize: 13, fontWeight: "500" },
+  pendingTime: { fontSize: 12, fontWeight: "500" },
+  pendingFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 14, gap: 10 },
+  waitingBadge: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
+  waitingText: { flex: 1, fontSize: 12, fontWeight: "600" },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  tabBarWrap: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopWidth: 1 },
+  tabBar: { flexDirection: "row", paddingTop: 10, paddingBottom: 6 },
+  tabItem: { flex: 1, alignItems: "center", gap: 4 },
+  tabLabel: { fontSize: 11, fontWeight: "600" },
 });

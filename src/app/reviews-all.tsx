@@ -13,10 +13,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../lib/ThemeContext';
 
 export default function ReviewsAllScreen() {
   const router = useRouter();
   const { contractorId } = useLocalSearchParams<{ contractorId?: string }>();
+  const { colors, mode } = useTheme();
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -53,51 +55,51 @@ export default function ReviewsAllScreen() {
   }, [contractorId]);
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
-      <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
+      <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
-          <Pressable style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+          <Pressable style={({ pressed }) => [styles.iconBtn, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>All Reviews</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>All Reviews</Text>
           <View style={styles.iconBtn} />
         </View>
 
         {loading ? (
           <View style={styles.centerWrap}>
-            <ActivityIndicator size="large" color="#3b82f6" />
+            <ActivityIndicator size="large" color={colors.blue} />
           </View>
         ) : (
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {reviews.length === 0 ? (
               <View style={styles.centerWrap}>
-                <Ionicons name="star-outline" size={40} color="#475569" />
-                <Text style={styles.emptyText}>No reviews yet.</Text>
+                <Ionicons name="star-outline" size={40} color={colors.textMuted} />
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No reviews yet.</Text>
               </View>
             ) : (
               reviews.map((r) => (
-                <View key={r.id} style={styles.reviewCard}>
+                <View key={r.id} style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <View style={styles.reviewHeader}>
-                    <View style={styles.reviewAvatar}>
-                      <Text style={styles.reviewAvatarText}>
+                    <View style={[styles.reviewAvatar, { backgroundColor: colors.surfaceSolid }]}>
+                      <Text style={[styles.reviewAvatarText, { color: colors.textPrimary }]}>
                         {r.clientName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
                       </Text>
                     </View>
                     <View style={styles.reviewMeta}>
-                      <Text style={styles.reviewName}>{r.clientName}</Text>
+                      <Text style={[styles.reviewName, { color: colors.textPrimary }]}>{r.clientName}</Text>
                       <View style={styles.starsRow}>
                         {Array.from({ length: r.rating }).map((_, i) => (
-                          <Ionicons key={i} name="star" size={12} color="#fbbf24" />
+                          <Ionicons key={i} name="star" size={12} color={colors.gold} />
                         ))}
-                        <Text style={styles.reviewDate}>
+                        <Text style={[styles.reviewDate, { color: colors.textMuted }]}>
                           {new Date(r.created_at).toLocaleDateString()}
                         </Text>
                       </View>
                     </View>
                   </View>
-                  {r.comment ? <Text style={styles.reviewText}>{r.comment}</Text> : null}
+                  {r.comment ? <Text style={[styles.reviewText, { color: colors.textSecondary }]}>{r.comment}</Text> : null}
                 </View>
               ))
             )}
@@ -110,23 +112,23 @@ export default function ReviewsAllScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#020617" },
+  root: { flex: 1 },
   safe: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
-  iconBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(30,41,59,0.8)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#1e293b" },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: "#f8fafc" },
+  iconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  headerTitle: { fontSize: 18, fontWeight: "700" },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
   centerWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingTop: 80 },
-  emptyText: { fontSize: 15, color: "#64748b", fontWeight: "500" },
-  reviewCard: { backgroundColor: "rgba(30,41,59,0.6)", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#1e293b", marginBottom: 12 },
+  emptyText: { fontSize: 15, fontWeight: "500" },
+  reviewCard: { borderRadius: 16, padding: 16, borderWidth: 1, marginBottom: 12 },
   reviewHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
-  reviewAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#334155", alignItems: "center", justifyContent: "center" },
-  reviewAvatarText: { fontSize: 14, fontWeight: "700", color: "#f8fafc" },
+  reviewAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  reviewAvatarText: { fontSize: 14, fontWeight: "700" },
   reviewMeta: { flex: 1 },
-  reviewName: { fontSize: 15, fontWeight: "700", color: "#f8fafc" },
+  reviewName: { fontSize: 15, fontWeight: "700" },
   starsRow: { flexDirection: "row", alignItems: "center", gap: 2, marginTop: 2 },
-  reviewDate: { fontSize: 12, color: "#64748b", marginLeft: 8 },
-  reviewText: { fontSize: 14, color: "#94a3b8", lineHeight: 22 },
+  reviewDate: { fontSize: 12, marginLeft: 8 },
+  reviewText: { fontSize: 14, lineHeight: 22 },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
 });
