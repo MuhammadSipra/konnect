@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator, Dimensions, Image,
+  ActivityIndicator, BackHandler, Dimensions, Image, Modal,
   Pressable,
   ScrollView,
   StatusBar,
@@ -15,9 +15,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AppAlert } from "../lib/AppAlert";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../lib/ThemeContext";
+import ZoomableImage from "../lib/ZoomableImage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const PORTFOLIO_ITEM_SIZE = (SCREEN_WIDTH - 40 - 12) / 2; // 40 = scrollContent horizontal padding, 12 = grid gap
+const PORTFOLIO_ITEM_SIZE = (SCREEN_WIDTH - 40 - 12) / 2;
 
 export default function ContractorDetailScreen() {
   const router = useRouter();
@@ -29,53 +30,30 @@ export default function ContractorDetailScreen() {
   const [portfolio, setPortfolio] = useState<any[]>([]);
   const [jobsDone, setJobsDone] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
       if (!id) return;
       setLoading(true);
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', id)
-        .single();
+      const { data: profileData } = await supabase.from('profiles').select('*').eq('id', id).single();
       if (profileData) setProfile(profileData);
 
-      const { data: reviewsData } = await supabase
-        .from('reviews')
-        .select('*')
-        .eq('contractor_id', id)
-        .order('created_at', { ascending: false });
-
+      const { data: reviewsData } = await supabase.from('reviews').select('*').eq('contractor_id', id).order('created_at', { ascending: false });
       if (reviewsData && reviewsData.length > 0) {
         const clientIds = reviewsData.map((r) => r.client_id);
-        const { data: clientsData } = await supabase
-          .from('profiles')
-          .select('id, name')
-          .in('id', clientIds);
-
-        const merged = reviewsData.map((r) => ({
-          ...r,
-          clientName: clientsData?.find((c) => c.id === r.client_id)?.name || 'Client',
-        }));
+        const { data: clientsData } = await supabase.from('profiles').select('id, name').in('id', clientIds);
+        const merged = reviewsData.map((r) => ({ ...r, clientName: clientsData?.find((c) => c.id === r.client_id)?.name || 'Client' }));
         setReviews(merged);
       } else {
         setReviews([]);
       }
 
-      const { data: portfolioData } = await supabase
-        .from('portfolio_photos')
-        .select('*')
-        .eq('contractor_id', id)
-        .order('created_at', { ascending: false });
+      const { data: portfolioData } = await supabase.from('portfolio_photos').select('*').eq('contractor_id', id).order('created_at', { ascending: false });
       if (portfolioData) setPortfolio(portfolioData);
 
-      const { count } = await supabase
-        .from('bids')
-        .select('*', { count: 'exact', head: true })
-        .eq('contractor_id', id)
-        .eq('status', 'completed');
+      const { count } = await supabase.from('bids').select('*', { count: 'exact', head: true }).eq('contractor_id', id).eq('status', 'completed');
       setJobsDone(count || 0);
 
       setLoading(false);
@@ -83,10 +61,13 @@ export default function ContractorDetailScreen() {
     loadData();
   }, [id]);
 
-  const avgRating =
-    reviews.length > 0
-      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-      : 0;
+  useEffect(() => {
+    const onBackPress = () => { router.back(); return true; };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, []);
+
+  const avgRating = reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0;
 
   if (loading) {
     return (
@@ -110,12 +91,7 @@ export default function ContractorDetailScreen() {
     );
   }
 
-  const initials = (profile.name || "?")
-    .split(" ")
-    .map((n: string) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  const initials = (profile.name || "?").split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
@@ -127,17 +103,17 @@ export default function ContractorDetailScreen() {
             <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Contractor Profile</Text>
-          <View style={styles.iconBtn} />
+          <View style={styles.headerSpacer} />
         </View>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.hero}>
-          {profile.profile_photo_url ? (
-  <Image source={{ uri: profile.profile_photo_url }} style={styles.avatarImage} />
-) : (
-  <LinearGradient colors={[colors.green, colors.greenDark]} style={styles.avatar}>
-    <Text style={styles.avatarText}>{initials}</Text>
-  </LinearGradient>
-)}
+            {profile.profile_photo_url ? (
+              <Image source={{ uri: profile.profile_photo_url }} style={styles.avatarImage} />
+            ) : (
+              <LinearGradient colors={[colors.green, colors.greenDark]} style={styles.avatar}>
+                <Text style={styles.avatarText}>{initials}</Text>
+              </LinearGradient>
+            )}
             <Text style={[styles.name, { color: colors.textPrimary }]}>{profile.name}</Text>
             <Text style={[styles.skill, { color: colors.textSecondary }]}>{profile.skill || "Contractor"}</Text>
             <View style={styles.ratingRow}>
@@ -172,88 +148,69 @@ export default function ContractorDetailScreen() {
           </View>
 
           <View style={styles.sectionHeaderRow}>
-  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Portfolio</Text>
-  {portfolio.length > 2 && (
-    <Pressable onPress={() => router.push(`/portfolio-all?contractorId=${id}` as never)}>
-      <Text style={[styles.viewAllLink, { color: colors.green }]}>View All</Text>
-    </Pressable>
-  )}
-</View>
-{portfolio.length === 0 ? (
-  <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-    <Text style={[styles.bio, { color: colors.textSecondary }]}>No portfolio photos yet.</Text>
-  </View>
-) : (
-  <View style={styles.portfolioGrid}>
-    {portfolio.slice(0, 2).map((item) => (
-      <Image
-        key={item.id}
-        source={{ uri: item.photo_url }}
-        style={[styles.portfolioItem, { width: PORTFOLIO_ITEM_SIZE, height: PORTFOLIO_ITEM_SIZE, backgroundColor: colors.surfaceSolid }]}
-      />
-    ))}
-  </View>
-)}
-
-<View style={styles.sectionHeaderRow}>
-  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Reviews</Text>
-  {reviews.length > 5 && (
-    <Pressable onPress={() => router.push(`/reviews-all?contractorId=${id}` as never)}>
-      <Text style={[styles.viewAllLink, { color: colors.green }]}>See All</Text>
-    </Pressable>
-  )}
-</View>
-{reviews.length === 0 ? (
-  <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-    <Text style={[styles.bio, { color: colors.textSecondary }]}>No reviews yet.</Text>
-  </View>
-) : (
-  reviews.slice(0, 5).map((r) => (
-    <View key={r.id} style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.reviewHeader}>
-        <View style={[styles.reviewAvatar, { backgroundColor: colors.surfaceSolid }]}>
-          <Text style={[styles.reviewAvatarText, { color: colors.textPrimary }]}>
-            {r.clientName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-          </Text>
-        </View>
-        <View style={styles.reviewMeta}>
-          <Text style={[styles.reviewName, { color: colors.textPrimary }]}>{r.clientName}</Text>
-          <View style={styles.starsRow}>
-            {Array.from({ length: r.rating }).map((_, i) => (
-              <Ionicons key={i} name="star" size={12} color={colors.gold} />
-            ))}
-            <Text style={[styles.reviewDate, { color: colors.textMuted }]}>
-              {new Date(r.created_at).toLocaleDateString()}
-            </Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Portfolio</Text>
+            {portfolio.length > 2 && (
+              <Pressable onPress={() => router.push(`/portfolio-all?contractorId=${id}` as never)}>
+                <Text style={[styles.viewAllLink, { color: colors.green }]}>View All</Text>
+              </Pressable>
+            )}
           </View>
-        </View>
-      </View>
-      {r.comment ? <Text style={[styles.reviewText, { color: colors.textSecondary }]}>{r.comment}</Text> : null}
-    </View>
-  ))
-)}
+          {portfolio.length === 0 ? (
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.bio, { color: colors.textSecondary }]}>No portfolio photos yet.</Text>
+            </View>
+          ) : (
+            <View style={styles.portfolioGrid}>
+              {portfolio.slice(0, 2).map((item) => (
+                <Pressable key={item.id} onPress={() => setViewingPhoto(item.photo_url)}>
+                  <Image source={{ uri: item.photo_url }} style={[styles.portfolioItem, { width: PORTFOLIO_ITEM_SIZE, height: PORTFOLIO_ITEM_SIZE, backgroundColor: colors.surfaceSolid }]} />
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Reviews</Text>
+            {reviews.length > 5 && (
+              <Pressable onPress={() => router.push(`/reviews-all?contractorId=${id}` as never)}>
+                <Text style={[styles.viewAllLink, { color: colors.green }]}>See All</Text>
+              </Pressable>
+            )}
+          </View>
+          {reviews.length === 0 ? (
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.bio, { color: colors.textSecondary }]}>No reviews yet.</Text>
+            </View>
+          ) : (
+            reviews.slice(0, 5).map((r) => (
+              <View key={r.id} style={[styles.reviewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.reviewHeader}>
+                  <View style={[styles.reviewAvatar, { backgroundColor: colors.surfaceSolid }]}>
+                    <Text style={[styles.reviewAvatarText, { color: colors.textPrimary }]}>{r.clientName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}</Text>
+                  </View>
+                  <View style={styles.reviewMeta}>
+                    <Text style={[styles.reviewName, { color: colors.textPrimary }]}>{r.clientName}</Text>
+                    <View style={styles.starsRow}>
+                      {Array.from({ length: r.rating }).map((_, i) => (<Ionicons key={i} name="star" size={12} color={colors.gold} />))}
+                      <Text style={[styles.reviewDate, { color: colors.textMuted }]}>{new Date(r.created_at).toLocaleDateString()}</Text>
+                    </View>
+                  </View>
+                </View>
+                {r.comment ? <Text style={[styles.reviewText, { color: colors.textSecondary }]}>{r.comment}</Text> : null}
+              </View>
+            ))
+          )}
           <View style={{ height: 100 }} />
         </ScrollView>
 
         <View style={[styles.bottomBar, { backgroundColor: colors.surfaceSolid, borderTopColor: colors.border }]}>
           <SafeAreaView edges={["bottom"]}>
             <View style={styles.bottomRow}>
-              <Pressable
-                style={[styles.msgBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                onPress={() =>
-                  AppAlert.show(
-                    "Message this contractor",
-                    "You'll be able to message this contractor once they've bid on one of your posted projects."
-                  )
-                }
-              >
+              <Pressable style={[styles.msgBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => AppAlert.show("Message this contractor", "You'll be able to message this contractor once they've bid on one of your posted projects.")}>
                 <Ionicons name="chatbubble-outline" size={20} color={colors.textPrimary} />
                 <Text style={[styles.msgBtnText, { color: colors.textPrimary }]}>Message</Text>
               </Pressable>
-              <Pressable
-                style={styles.hireWrap}
-                onPress={() => router.push(`/post-project?targetContractorId=${id}` as never)}
-              >
+              <Pressable style={styles.hireWrap} onPress={() => router.push(`/post-project?targetContractorId=${id}` as never)}>
                 <LinearGradient colors={[colors.green, colors.greenDark]} style={styles.hireBtn}>
                   <Text style={styles.hireBtnText}>Post a Project for {profile.name?.split(" ")[0] || "them"}</Text>
                 </LinearGradient>
@@ -262,6 +219,15 @@ export default function ContractorDetailScreen() {
           </SafeAreaView>
         </View>
       </SafeAreaView>
+
+      <Modal visible={viewingPhoto !== null} transparent animationType="fade" onRequestClose={() => setViewingPhoto(null)}>
+        <View style={styles.viewerOverlay}>
+          <Pressable style={styles.viewerCloseBtn} onPress={() => setViewingPhoto(null)}>
+            <Ionicons name="close" size={28} color="#fff" />
+          </Pressable>
+          {viewingPhoto && <ZoomableImage uri={viewingPhoto} />}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -273,6 +239,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
   iconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   headerTitle: { fontSize: 18, fontWeight: "700" },
+  headerSpacer: { width: 40, height: 40 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20 },
   hero: { alignItems: "center", paddingVertical: 24 },
@@ -315,4 +282,6 @@ const styles = StyleSheet.create({
   hireBtnText: { fontSize: 14, fontWeight: "700", color: "#fff", textAlign: "center" },
   avatarImage: { width: 96, height: 96, borderRadius: 48, marginBottom: 16 },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  viewerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.95)", alignItems: "center", justifyContent: "center" },
+  viewerCloseBtn: { position: "absolute", top: 50, right: 20, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
 });

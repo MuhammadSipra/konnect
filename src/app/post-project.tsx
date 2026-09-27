@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Alert,
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,8 +15,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { AppAlert } from "../lib/AppAlert";
 import { getCurrentProfileId, setCurrentProfile } from '../lib/currentProfile';
 import { supabase } from '../lib/supabase';
+import { useTheme } from "../lib/ThemeContext";
 const CATEGORIES = [
   "Full Project",
   "Interior",
@@ -44,11 +46,13 @@ function ChipGroup<T extends string>({
   value,
   onChange,
   highlightFirst,
+  colors,
 }: {
   options: readonly T[];
   value: T;
   onChange: (v: T) => void;
   highlightFirst?: boolean;
+  colors: any;
 }) {
   return (
     <ScrollView
@@ -66,15 +70,17 @@ function ChipGroup<T extends string>({
             onPress={() => onChange(option)}
             style={[
               styles.chip,
-              active && styles.chipActive,
-              isFirst && active && styles.chipGoldActive,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              active && { backgroundColor: colors.blue + '33', borderColor: colors.blue },
+              isFirst && active && { backgroundColor: colors.gold + '26', borderColor: colors.gold },
             ]}
           >
             <Text
               style={[
                 styles.chipText,
-                active && styles.chipTextActive,
-                isFirst && active && styles.chipGoldText,
+                { color: colors.textSecondary },
+                active && { color: colors.blue },
+                isFirst && active && { color: colors.gold },
               ]}
             >
               {isFirst && option === "Full Project" ? "Full Project ⭐" : option}
@@ -111,6 +117,7 @@ async function resolveClientId(): Promise<number | null> {
 
 export default function PostProjectScreen() {
   const router = useRouter();
+  const { colors, mode } = useTheme();
   const { targetContractorId } = useLocalSearchParams<{ targetContractorId?: string }>();
 
   const [title, setTitle] = useState("");
@@ -120,6 +127,15 @@ export default function PostProjectScreen() {
   const [location, setLocation] = useState("");
   const [timeline, setTimeline] = useState<Timeline>("flexible");
   const [posting, setPosting] = useState(false);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      router.back();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, []);
 
   const canSubmit =
     title.trim().length > 0 &&
@@ -132,7 +148,7 @@ export default function PostProjectScreen() {
 
     const clientId = await resolveClientId();
     if (!clientId) {
-      Alert.alert("Error", "Please log in again to post a project.");
+      AppAlert.show("Error", "Please log in again to post a project.");
       setPosting(false);
       return;
     }
@@ -157,7 +173,7 @@ export default function PostProjectScreen() {
 
     if (error) {
       console.log('POST ERROR:', error.message);
-      Alert.alert("Error", "Could not post your project. Please try again.");
+      AppAlert.show("Error", "Could not post your project. Please try again.");
       return;
     }
 
@@ -166,26 +182,23 @@ export default function PostProjectScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
 
-      <LinearGradient
-        colors={["#0f172a", "#020617", "#0a0f1a"]}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.glowBlue} />
-      <View style={styles.glowGreen} />
+      <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
+      <View style={[styles.glowBlue, { backgroundColor: colors.glowBlueBg }]} />
+      <View style={[styles.glowGreen, { backgroundColor: colors.glowGreenBg }]} />
 
       <SafeAreaView style={styles.safe} edges={["top"]}>
         {/* Header */}
         <View style={styles.header}>
           <Pressable
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
             onPress={() => router.back()}
           >
-            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Post a Project</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Post a Project</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -200,30 +213,31 @@ export default function PostProjectScreen() {
             keyboardShouldPersistTaps="handled"
           >
             {/* Project Title */}
-            <Text style={styles.label}>Project title</Text>
+            <Text style={[styles.label, { color: colors.textMuted }]}>Project title</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
               placeholder="e.g. Full kitchen renovation"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               value={title}
               onChangeText={setTitle}
             />
 
             {/* Category */}
-            <Text style={styles.label}>Category</Text>
+            <Text style={[styles.label, { color: colors.textMuted }]}>Category</Text>
             <ChipGroup
               options={CATEGORIES}
               value={category}
               onChange={setCategory}
               highlightFirst
+              colors={colors}
             />
 
             {/* Description */}
-            <Text style={styles.label}>Description</Text>
+            <Text style={[styles.label, { color: colors.textMuted }]}>Description</Text>
             <TextInput
-              style={[styles.input, styles.textArea]}
+              style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
               placeholder="Describe the work needed, materials, size of project…"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               value={description}
               onChangeText={setDescription}
               multiline
@@ -231,39 +245,41 @@ export default function PostProjectScreen() {
             />
 
             {/* Budget */}
-            <Text style={styles.label}>Budget range</Text>
+            <Text style={[styles.label, { color: colors.textMuted }]}>Budget range</Text>
             <ChipGroup
               options={BUDGET_RANGES}
               value={budget}
               onChange={setBudget}
+              colors={colors}
             />
 
             {/* Location */}
-            <Text style={styles.label}>Location</Text>
-            <View style={styles.locationWrap}>
-              <Ionicons name="location-outline" size={20} color="#64748b" />
+            <Text style={[styles.label, { color: colors.textMuted }]}>Location</Text>
+            <View style={[styles.locationWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Ionicons name="location-outline" size={20} color={colors.textMuted} />
               <TextInput
-                style={styles.locationInput}
+                style={[styles.locationInput, { color: colors.textPrimary }]}
                 placeholder="Area, city — e.g. Andheri West, Mumbai"
-                placeholderTextColor="#64748b"
+                placeholderTextColor={colors.textMuted}
                 value={location}
                 onChangeText={setLocation}
               />
             </View>
 
             {/* Timeline */}
-            <Text style={styles.label}>Timeline</Text>
+            <Text style={[styles.label, { color: colors.textMuted }]}>Timeline</Text>
             <ChipGroup
               options={TIMELINES}
               value={timeline}
               onChange={setTimeline}
+              colors={colors}
             />
 
             <View style={{ height: 100 }} />
           </ScrollView>
 
           {/* Post Project button */}
-          <View style={styles.bottomCtaWrap}>
+          <View style={[styles.bottomCtaWrap, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
             <SafeAreaView edges={["bottom"]}>
               <Pressable
                 style={({ pressed }) => [
@@ -277,7 +293,7 @@ export default function PostProjectScreen() {
                 <LinearGradient
                   colors={
                     canSubmit && !posting
-                      ? ["#3b82f6", "#2563eb"]
+                      ? [colors.blue, colors.blueDark]
                       : ["#334155", "#1e293b"]
                   }
                   start={{ x: 0, y: 0 }}
@@ -297,178 +313,29 @@ export default function PostProjectScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#020617",
-  },
-  flex: {
-    flex: 1,
-  },
-  glowBlue: {
-    position: "absolute",
-    top: -60,
-    left: -50,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: "rgba(59, 130, 246, 0.1)",
-  },
-  glowGreen: {
-    position: "absolute",
-    bottom: 120,
-    right: -70,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "rgba(34, 197, 94, 0.08)",
-  },
-  safe: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "rgba(30, 41, 59, 0.8)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#f8fafc",
-    letterSpacing: -0.3,
-  },
-  headerSpacer: {
-    width: 40,
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#64748b",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 10,
-    marginTop: 4,
-  },
-  input: {
-    backgroundColor: "rgba(30, 41, 59, 0.7)",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    marginBottom: 20,
-  },
-  textArea: {
-    minHeight: 120,
-    paddingTop: 14,
-  },
-  chipRow: {
-    gap: 10,
-    paddingBottom: 4,
-    marginBottom: 20,
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: "rgba(30, 41, 59, 0.6)",
-    borderWidth: 1,
-    borderColor: "#1e293b",
-  },
-  chipActive: {
-    backgroundColor: "rgba(59, 130, 246, 0.2)",
-    borderColor: "#3b82f6",
-  },
-  chipGoldActive: {
-    backgroundColor: "rgba(251, 191, 36, 0.15)",
-    borderColor: "#fbbf24",
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#94a3b8",
-  },
-  chipTextActive: {
-    color: "#60a5fa",
-  },
-  chipGoldText: {
-    color: "#fbbf24",
-  },
-  locationWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "rgba(30, 41, 59, 0.7)",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: "#1e293b",
-    marginBottom: 20,
-  },
-  locationInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#f8fafc",
-    padding: 0,
-  },
-  bottomCtaWrap: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    backgroundColor: "rgba(15, 23, 42, 0.95)",
-    borderTopWidth: 1,
-    borderTopColor: "#1e293b",
-  },
-  postBtnWrap: {
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: 8,
-    shadowColor: "#2563eb",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  postBtnDisabled: {
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  postBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingVertical: 18,
-    borderRadius: 16,
-  },
-  postBtnText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#ffffff",
-    letterSpacing: -0.2,
-  },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
+  root: { flex: 1 },
+  flex: { flex: 1 },
+  glowBlue: { position: "absolute", top: -60, left: -50, width: 240, height: 240, borderRadius: 120 },
+  glowGreen: { position: "absolute", bottom: 120, right: -70, width: 260, height: 260, borderRadius: 130 },
+  safe: { flex: 1 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
+  backBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  headerTitle: { fontSize: 18, fontWeight: "700", letterSpacing: -0.3 },
+  headerSpacer: { width: 40 },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
+  label: { fontSize: 13, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10, marginTop: 4 },
+  input: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, borderWidth: 1, marginBottom: 20 },
+  textArea: { minHeight: 120, paddingTop: 14 },
+  chipRow: { gap: 10, paddingBottom: 4, marginBottom: 20 },
+  chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999, borderWidth: 1 },
+  chipText: { fontSize: 14, fontWeight: "600" },
+  locationWrap: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, marginBottom: 20 },
+  locationInput: { flex: 1, fontSize: 16, padding: 0 },
+  bottomCtaWrap: { paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1 },
+  postBtnWrap: { borderRadius: 16, overflow: "hidden", marginBottom: 8, shadowColor: "#2563eb", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 8 },
+  postBtnDisabled: { shadowOpacity: 0, elevation: 0 },
+  postBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 18, borderRadius: 16 },
+  postBtnText: { fontSize: 18, fontWeight: "700", color: "#ffffff", letterSpacing: -0.2 },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
 });

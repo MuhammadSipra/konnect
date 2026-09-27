@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
+  Image,
   Pressable,
   ScrollView,
   StatusBar,
@@ -178,7 +179,12 @@ export default function ProfileScreen() {
         <View style={styles.header}>
           <View style={styles.iconBtn} />
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Profile</Text>
-          <View style={styles.iconBtn} />
+          <Pressable
+  style={({ pressed }) => [styles.iconBtn, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
+  onPress={() => router.push('/edit-profile' as never)}
+>
+  <Ionicons name="create-outline" size={20} color={colors.textPrimary} />
+</Pressable>
         </View>
 
         <ScrollView
@@ -188,12 +194,16 @@ export default function ProfileScreen() {
         >
           {/* Profile hero */}
           <View style={styles.hero}>
-            <LinearGradient
-              colors={[colors.green, colors.greenDark]}
-              style={styles.avatar}
-            >
-              <Text style={styles.avatarText}>{initials}</Text>
-            </LinearGradient>
+          {profile.profile_photo_url ? (
+  <Image source={{ uri: profile.profile_photo_url }} style={styles.avatarImage} />
+) : (
+  <LinearGradient
+    colors={[colors.green, colors.greenDark]}
+    style={styles.avatar}
+  >
+    <Text style={styles.avatarText}>{initials}</Text>
+  </LinearGradient>
+)}
             <Text style={[styles.name, { color: colors.textPrimary }]}>{profile.name}</Text>
             <Text style={[styles.skill, { color: colors.textSecondary }]}>{profile.skill || (isContractor ? "Contractor" : "Client")}</Text>
             {isContractor && (
@@ -235,7 +245,7 @@ export default function ProfileScreen() {
                 icon="shield-checkmark-outline"
                 label="Verification Status"
                 badge={profile.verification_status}
-                onPress={() => router.push("/verification-pending" as never)}
+                onPress={profile.verification_status === 'approved' ? () => {} : () => router.push("/verification-pending" as never)}
               />
             )}
             {isContractor && (
@@ -403,6 +413,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
+  avatarImage: { width: 96, height: 96, borderRadius: 48, marginBottom: 16 },
   avatarText: { fontSize: 32, fontWeight: "800", color: "#ffffff" },
   name: { fontSize: 24, fontWeight: "800", letterSpacing: -0.5 },
   skill: { marginTop: 6, fontSize: 15, fontWeight: "500" },
@@ -428,4 +439,5 @@ const styles = StyleSheet.create({
   tabBar: { flexDirection: "row", paddingTop: 10, paddingBottom: 6 },
   tabItem: { flex: 1, alignItems: "center", gap: 4 },
   tabLabel: { fontSize: 11, fontWeight: "600" },
+  pressed: { opacity: 0.85 },
 });

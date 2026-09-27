@@ -35,18 +35,10 @@ const BOTTOM_TABS = [
 async function resolveContractorId(): Promise<number | null> {
   const cached = getCurrentProfileId();
   if (cached) return cached;
-
   const { data: sessionData } = await supabase.auth.getSession();
   const authUserId = sessionData?.session?.user?.id;
   if (!authUserId) return null;
-
-  const { data: profileRow } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('auth_user_id', authUserId)
-    .eq('user_type', 'contractor')
-    .maybeSingle();
-
+  const { data: profileRow } = await supabase.from('profiles').select('id').eq('auth_user_id', authUserId).eq('user_type', 'contractor').maybeSingle();
   return profileRow?.id ?? null;
 }
 
@@ -63,31 +55,14 @@ export default function JobsScreen() {
   useEffect(() => {
     const load = async () => {
       const contractorId = await resolveContractorId();
-      if (!contractorId) {
-        setLoading(false);
-        return;
-      }
+      if (!contractorId) { setLoading(false); return; }
 
-      const { data: bids } = await supabase
-        .from('bids')
-        .select('*')
-        .eq('contractor_id', contractorId);
-
-      if (!bids || bids.length === 0) {
-        setLoading(false);
-        return;
-      }
+      const { data: bids } = await supabase.from('bids').select('*').eq('contractor_id', contractorId);
+      if (!bids || bids.length === 0) { setLoading(false); return; }
 
       const projectIds = bids.map((b) => b.project_id);
-      const { data: projects } = await supabase
-        .from('projects')
-        .select('*')
-        .in('id', projectIds);
-
-      const { data: reviews } = await supabase
-        .from('reviews')
-        .select('*')
-        .eq('contractor_id', contractorId);
+      const { data: projects } = await supabase.from('projects').select('*').in('id', projectIds);
+      const { data: reviews } = await supabase.from('reviews').select('*').eq('contractor_id', contractorId);
 
       const merged = bids.map((bid) => ({
         ...bid,
@@ -98,17 +73,13 @@ export default function JobsScreen() {
       setActiveJobs(merged.filter((b) => b.status === 'accepted' || b.status === 'confirmed'));
       setCompletedJobs(merged.filter((b) => b.status === 'completed'));
       setPendingJobs(merged.filter((b) => b.status === 'pending' || b.status === 'locked'));
-
       setLoading(false);
     };
     load();
   }, []);
 
   useEffect(() => {
-    const onBackPress = () => {
-      router.replace('/contractor');
-      return true;
-    };
+    const onBackPress = () => { router.replace('/contractor'); return true; };
     const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => subscription.remove();
   }, []);
@@ -121,34 +92,21 @@ export default function JobsScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
-
       <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
       <View style={[styles.glowGreen, { backgroundColor: colors.glowGreenBg }]} />
       <View style={[styles.glowBlue, { backgroundColor: colors.glowBlueBg }]} />
 
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Jobs</Text>
         </View>
 
-        {/* Top tabs */}
         <View style={styles.tabRow}>
           {TABS.map((tab) => {
             const selected = activeTab === tab.key;
             return (
-              <Pressable
-                key={tab.key}
-                style={[
-                  styles.tabPill,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                  selected && { backgroundColor: colors.green + '26', borderColor: colors.green + '66' },
-                ]}
-                onPress={() => setActiveTab(tab.key)}
-              >
-                <Text style={[styles.tabPillText, { color: colors.textMuted }, selected && { color: colors.green }]}>
-                  {tab.label}
-                </Text>
+              <Pressable key={tab.key} style={[styles.tabPill, { backgroundColor: colors.surface, borderColor: colors.border }, selected && { backgroundColor: colors.green + '26', borderColor: colors.green + '66' }]} onPress={() => setActiveTab(tab.key)}>
+                <Text style={[styles.tabPillText, { color: colors.textMuted }, selected && { color: colors.green }]}>{tab.label}</Text>
               </Pressable>
             );
           })}
@@ -159,21 +117,11 @@ export default function JobsScreen() {
             <ActivityIndicator size="large" color={colors.green} />
           </View>
         ) : (
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {activeTab === "active" && (
-              activeJobs.length === 0 ? (
-                <EmptyState text="No active jobs right now." />
-              ) : (
+              activeJobs.length === 0 ? <EmptyState text="No active jobs right now." /> : (
                 activeJobs.map((job) => (
-                  <Pressable
-                    key={job.id}
-                    style={({ pressed }) => [styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
-                    onPress={() => router.push(`/project-detail?id=${job.project.id}` as never)}
-                  >
+                  <Pressable key={job.id} style={({ pressed }) => [styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]} onPress={() => router.push(`/project-detail?id=${job.project.id}&viewerRole=contractor` as never)}>
                     <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{job.project.title}</Text>
                     <View style={styles.cardRow}>
                       <Ionicons name="location-outline" size={14} color={colors.textMuted} />
@@ -182,9 +130,7 @@ export default function JobsScreen() {
                     <Text style={[styles.cardBudget, { color: colors.green }]}>{job.project.budget}</Text>
                     <View style={styles.statusRow}>
                       <View style={[styles.statusBadge, { backgroundColor: colors.green + '26', borderColor: colors.green + '59' }]}>
-                        <Text style={[styles.statusBadgeText, { color: colors.green }]}>
-                          {job.status === 'confirmed' ? 'In Progress' : 'Confirmed'}
-                        </Text>
+                        <Text style={[styles.statusBadgeText, { color: colors.green }]}>{job.status === 'confirmed' ? 'In Progress' : 'Confirmed'}</Text>
                       </View>
                     </View>
                   </Pressable>
@@ -193,15 +139,9 @@ export default function JobsScreen() {
             )}
 
             {activeTab === "completed" && (
-              completedJobs.length === 0 ? (
-                <EmptyState text="No completed jobs yet." />
-              ) : (
+              completedJobs.length === 0 ? <EmptyState text="No completed jobs yet." /> : (
                 completedJobs.map((job) => (
-                  <Pressable
-                    key={job.id}
-                    style={({ pressed }) => [styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
-                    onPress={() => router.push(`/project-detail?id=${job.project.id}` as never)}
-                  >
+                  <Pressable key={job.id} style={({ pressed }) => [styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]} onPress={() => router.push(`/job-detail?bidId=${job.id}` as never)}>
                     <View style={styles.cardTop}>
                       <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{job.project.title}</Text>
                       <View style={[styles.completedBadge, { backgroundColor: colors.blue + '26', borderColor: colors.blue + '59' }]}>
@@ -213,9 +153,7 @@ export default function JobsScreen() {
                       <Text style={[styles.cardDetail, { color: colors.textMuted }]}>{job.project.location}</Text>
                     </View>
                     <Text style={[styles.cardBudget, { color: colors.green }]}>{job.project.budget}</Text>
-                    <Text style={[styles.completedDate, { color: colors.textMuted }]}>
-                      Finished on {new Date(job.created_at).toLocaleDateString()}
-                    </Text>
+                    <Text style={[styles.completedDate, { color: colors.textMuted }]}>Finished on {new Date(job.created_at).toLocaleDateString()}</Text>
                     {job.review ? (
                       <View style={[styles.ratingRow, { borderTopColor: colors.border }]}>
                         <Ionicons name="star" size={16} color={colors.gold} />
@@ -232,36 +170,25 @@ export default function JobsScreen() {
             )}
 
             {activeTab === "pending" && (
-              pendingJobs.length === 0 ? (
-                <EmptyState text="No pending jobs right now." />
-              ) : (
+              pendingJobs.length === 0 ? <EmptyState text="No pending jobs right now." /> : (
                 pendingJobs.map((job) => (
-                  <Pressable
-                    key={job.id}
-                    style={({ pressed }) => [styles.card, styles.pendingCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
-                    onPress={() => router.push('/contractor' as never)}
-                  >
+                  <Pressable key={job.id} style={({ pressed }) => [styles.card, styles.pendingCard, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]} onPress={() => router.push(`/project-detail?id=${job.project.id}&viewerRole=contractor` as never)}>
                     <View style={[styles.pendingAccent, { backgroundColor: colors.gold }]} />
                     <View style={styles.pendingContent}>
                       <View style={styles.cardTop}>
                         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{job.project.title}</Text>
-                        <Text style={[styles.pendingTime, { color: colors.textMuted }]}>
-                          {new Date(job.created_at).toLocaleDateString()}
-                        </Text>
+                        <Text style={[styles.pendingTime, { color: colors.textMuted }]}>{new Date(job.created_at).toLocaleDateString()}</Text>
                       </View>
                       <View style={styles.cardRow}>
                         <Ionicons name="location-outline" size={14} color={colors.textMuted} />
                         <Text style={[styles.cardDetail, { color: colors.textMuted }]}>{job.project.location}</Text>
                       </View>
                       <Text style={[styles.cardBudget, { color: colors.green }]}>{job.project.budget}</Text>
-
                       <View style={styles.pendingFooter}>
                         <View style={styles.waitingBadge}>
                           <Ionicons name="time-outline" size={14} color={colors.gold} />
                           <Text style={[styles.waitingText, { color: colors.gold }]}>
-                            {job.status === 'locked'
-                              ? 'Client shortlisted you — enter code on Home'
-                              : 'Waiting for client response'}
+                            {job.status === 'locked' ? 'Client shortlisted you — tap to view & message' : 'Waiting for client response'}
                           </Text>
                         </View>
                       </View>
@@ -275,30 +202,15 @@ export default function JobsScreen() {
           </ScrollView>
         )}
 
-        {/* Bottom Tab Bar */}
         <View style={[styles.tabBarWrap, { backgroundColor: colors.surfaceSolid, borderTopColor: colors.border }]}>
           <SafeAreaView edges={["bottom"]}>
             <View style={styles.tabBar}>
               {BOTTOM_TABS.map((tab) => {
                 const active = tab.key === "jobs";
                 return (
-                  <Pressable
-                    key={tab.key}
-                    style={styles.tabItem}
-                    onPress={() => handleBottomTabPress(tab)}
-                  >
-                    <Ionicons
-                      name={
-                        active
-                          ? tab.icon
-                          : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)
-                      }
-                      size={22}
-                      color={active ? colors.green : colors.textMuted}
-                    />
-                    <Text style={[styles.tabLabel, { color: active ? colors.green : colors.textMuted }]}>
-                      {tab.label}
-                    </Text>
+                  <Pressable key={tab.key} style={styles.tabItem} onPress={() => handleBottomTabPress(tab)}>
+                    <Ionicons name={active ? tab.icon : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)} size={22} color={active ? colors.green : colors.textMuted} />
+                    <Text style={[styles.tabLabel, { color: active ? colors.green : colors.textMuted }]}>{tab.label}</Text>
                   </Pressable>
                 );
               })}

@@ -11,8 +11,27 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { clearCurrentProfile, getCurrentProfileId } from "../lib/currentProfile";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../lib/ThemeContext";
+
+async function resolveContractorId(): Promise<number | null> {
+  const cached = getCurrentProfileId();
+  if (cached) return cached;
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const authUserId = sessionData?.session?.user?.id;
+  if (!authUserId) return null;
+
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("auth_user_id", authUserId)
+    .eq("user_type", "contractor")
+    .maybeSingle();
+
+  return profileRow?.id ?? null;
+}
 
 export default function VerificationPendingScreen() {
   const router = useRouter();
@@ -24,10 +43,9 @@ export default function VerificationPendingScreen() {
   const checkStatus = async () => {
     setChecking(true);
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const authUserId = sessionData?.session?.user?.id;
+    const id = await resolveContractorId();
 
-    if (!authUserId) {
+    if (!id) {
       setChecking(false);
       setLoading(false);
       return;
@@ -36,7 +54,7 @@ export default function VerificationPendingScreen() {
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("verification_status")
-      .eq("auth_user_id", authUserId)
+      .eq("id", id)
       .single();
 
     console.log("VERIFICATION STATUS:", profile, "ERROR:", error);
@@ -118,6 +136,8 @@ export default function VerificationPendingScreen() {
             style={styles.logoutBtn}
             onPress={async () => {
               await supabase.auth.signOut();
+              clearCurrentProfile();
+              router.dismissAll();
               router.replace("/welcome");
             }}
           >

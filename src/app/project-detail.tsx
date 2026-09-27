@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Modal,
+  ActivityIndicator, BackHandler, Modal,
   Pressable,
   ScrollView,
   StatusBar,
@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppAlert } from '../lib/AppAlert';
+import { getCurrentProfileId } from '../lib/currentProfile';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../lib/ThemeContext';
 
@@ -27,8 +28,11 @@ const CLIENT_CANCEL_REASONS = [
 
 export default function ProjectDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { id, viewerRole } = useLocalSearchParams<{ id?: string; viewerRole?: string }>();
   const { colors, mode } = useTheme();
+
+  const isContractorView = viewerRole === 'contractor';
+  const myContractorId = isContractorView ? getCurrentProfileId() : null;
 
   const [project, setProject] = useState<any>(null);
   const [bids, setBids] = useState<any[]>([]);
@@ -81,6 +85,15 @@ export default function ProjectDetailScreen() {
     if (id) loadData();
   }, [id]);
 
+  useEffect(() => {
+    const onBackPress = () => {
+      router.back();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, []);
+
   const handleLock = async (bidId: string) => {
     const { error } = await supabase
       .from('bids')
@@ -101,11 +114,6 @@ export default function ProjectDetailScreen() {
     setCancelReasonBidId(bidId);
   };
 
-  // Client cancellations carry NO penalty on the contractor (no trust/wallet hit,
-  // and the per-project cancel_count that leads to "blocked" is untouched —
-  // that counter only moves when the CONTRACTOR is the one who cancels).
-  // The client themselves gets a soft trust hit only from their 2nd cancellation
-  // in a calendar month onward.
   const submitClientCancellation = async (reason: string) => {
     if (!cancelReasonBidId || !project) return;
     const bidId = cancelReasonBidId;
@@ -206,13 +214,15 @@ export default function ProjectDetailScreen() {
     );
   }
 
-  const visibleBids = bids.filter(
-    (b) =>
-      b.status !== 'not_selected' &&
-      b.status !== 'cancelled_by_client' &&
-      b.status !== 'cancelled_by_contractor' &&
-      b.status !== 'blocked'
-  );
+  const visibleBids = bids
+    .filter(
+      (b) =>
+        b.status !== 'not_selected' &&
+        b.status !== 'cancelled_by_client' &&
+        b.status !== 'cancelled_by_contractor' &&
+        b.status !== 'blocked'
+    )
+    .filter((b) => !isContractorView || b.contractor_id === myContractorId);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
@@ -224,7 +234,7 @@ export default function ProjectDetailScreen() {
             <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Project Details</Text>
-          <View style={styles.iconBtn} />
+          <View style={styles.headerSpacer} />
         </View>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -238,7 +248,7 @@ export default function ProjectDetailScreen() {
             </View>
             <Text style={[styles.projectTitle, { color: colors.textPrimary }]}>{project.title}</Text>
 
-            {project.confirmation_code ? (
+            {project.confirmation_code && !isContractorView ? (
               <View style={[styles.codeBox, { backgroundColor: colors.gold + '1A', borderColor: colors.gold + '4D' }]}>
                 <Ionicons name="key-outline" size={14} color={colors.gold} />
                 <Text style={[styles.codeText, { color: colors.gold }]}>Confirmation Code: {project.confirmation_code}</Text>
@@ -265,13 +275,15 @@ export default function ProjectDetailScreen() {
           </View>
 
           <View style={styles.bidsHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Bids Received</Text>
-            <Text style={[styles.bidsCount, { color: colors.textMuted }]}>{visibleBids.length} bids</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{isContractorView ? 'Your Bid' : 'Bids Received'}</Text>
+            {!isContractorView && <Text style={[styles.bidsCount, { color: colors.textMuted }]}>{visibleBids.length} bids</Text>}
           </View>
 
           {visibleBids.length === 0 ? (
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.description, { color: colors.textSecondary }]}>No bids yet. Check back soon.</Text>
+              <Text style={[styles.description, { color: colors.textSecondary }]}>
+                {isContractorView ? "No bid found." : "No bids yet. Check back soon."}
+              </Text>
             </View>
           ) : (
             visibleBids.map((bid) => {
@@ -280,6 +292,7 @@ export default function ProjectDetailScreen() {
               const isLocked = bid.status === 'locked';
               const isConfirmed = bid.status === 'confirmed';
               const isCompleted = bid.status === 'completed';
+              const chatViewerRole = isContractorView ? 'contractor' : 'client';
 
               return (
                 <View key={bid.id} style={[styles.bidCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -306,17 +319,21 @@ export default function ProjectDetailScreen() {
                         </View>
                         <Pressable
                           style={styles.messageBtn}
-                          onPress={() => router.replace(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=client` as never)}
+                          onPress={() => router.push(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=${chatViewerRole}` as never)}
                         >
                           <Ionicons name="chatbubble-outline" size={13} color={colors.blue} />
                           <Text style={[styles.messageBtnText, { color: colors.blue }]}>Message</Text>
                         </Pressable>
-                        <Pressable onPress={() => handleMarkComplete(bid)}>
-                          <Text style={[styles.completeLink, { color: colors.green }]}>Mark Complete</Text>
-                        </Pressable>
-                        <Pressable onPress={() => handleCancelConfirmed(bid.id)}>
-                          <Text style={[styles.cancelLink, { color: colors.red }]}>Cancel</Text>
-                        </Pressable>
+                        {!isContractorView && (
+                          <>
+                            <Pressable onPress={() => handleMarkComplete(bid)}>
+                              <Text style={[styles.completeLink, { color: colors.green }]}>Mark Complete</Text>
+                            </Pressable>
+                            <Pressable onPress={() => handleCancelConfirmed(bid.id)}>
+                              <Text style={[styles.cancelLink, { color: colors.red }]}>Cancel</Text>
+                            </Pressable>
+                          </>
+                        )}
                       </View>
                     ) : isLocked ? (
                       <View style={{ alignItems: "flex-end", gap: 6 }}>
@@ -325,11 +342,15 @@ export default function ProjectDetailScreen() {
                         </View>
                         <Pressable
                           style={styles.messageBtn}
-                          onPress={() => router.replace(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=client` as never)}
+                          onPress={() => router.push(`/chat?contractorId=${bid.contractor_id}&projectId=${id}&clientId=${project.client_id}&viewerRole=${chatViewerRole}` as never)}
                         >
                           <Ionicons name="chatbubble-outline" size={13} color={colors.blue} />
                           <Text style={[styles.messageBtnText, { color: colors.blue }]}>Message</Text>
                         </Pressable>
+                      </View>
+                    ) : isContractorView ? (
+                      <View style={[styles.acceptedBadge, { backgroundColor: colors.gold + '26', borderColor: colors.gold + '59' }]}>
+                        <Text style={[styles.acceptedBadgeText, { color: colors.gold }]}>Pending</Text>
                       </View>
                     ) : (
                       <Pressable
@@ -415,6 +436,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
   iconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   headerTitle: { fontSize: 18, fontWeight: "700" },
+  headerSpacer: { width: 40, height: 40 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
   card: { borderRadius: 16, padding: 16, borderWidth: 1, marginBottom: 20 },

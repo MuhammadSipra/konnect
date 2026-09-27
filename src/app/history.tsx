@@ -3,13 +3,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Pressable,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  BackHandler,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getCurrentProfileId, getCurrentRole } from '../lib/currentProfile';
@@ -125,6 +126,15 @@ export default function HistoryScreen() {
     load();
   }, []);
 
+  useEffect(() => {
+    const onBackPress = () => {
+      router.back();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, []);
+
   const isContractor = role === 'contractor';
 
   const dateFiltered = entries.filter(({ bid }) => {
@@ -147,7 +157,7 @@ export default function HistoryScreen() {
             <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{showAll ? "Full History" : "History"}</Text>
-          <View style={styles.iconBtn} />
+          <View style={styles.headerSpacer} />
         </View>
 
         {loading ? (
@@ -247,6 +257,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
   iconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  headerSpacer: { width: 40, height: 40 },
   headerTitle: { fontSize: 18, fontWeight: "700" },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 8 },

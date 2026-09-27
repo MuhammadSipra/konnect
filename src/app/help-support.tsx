@@ -3,24 +3,27 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  BackHandler,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getCurrentProfileId, getCurrentRole } from "../lib/currentProfile";
 import { supabase } from "../lib/supabase";
+import { useTheme } from "../lib/ThemeContext";
 
 export default function HelpSupportScreen() {
   const router = useRouter();
+  const { colors, mode } = useTheme();
 
   const [userId, setUserId] = useState<number | null>(null);
   const [userType, setUserType] = useState<string | null>(null);
@@ -77,6 +80,15 @@ export default function HelpSupportScreen() {
       setLoading(false);
     };
     init();
+  }, []);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      router.back();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
   }, []);
 
   const handleCreateTicket = async () => {
@@ -137,39 +149,39 @@ export default function HelpSupportScreen() {
 
   if (loading) {
     return (
-      <View style={styles.root}>
-        <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
+      <View style={[styles.root, { backgroundColor: colors.bg }]}>
+        <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
         <SafeAreaView style={styles.centerWrap}>
-          <ActivityIndicator size="large" color="#3b82f6" />
+          <ActivityIndicator size="large" color={colors.blue} />
         </SafeAreaView>
       </View>
     );
   }
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
-      <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
-      <View style={styles.glowGreen} />
-      <View style={styles.glowBlue} />
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+      <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
+      <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
+      <View style={[styles.glowGreen, { backgroundColor: colors.glowGreenBg }]} />
+      <View style={[styles.glowBlue, { backgroundColor: colors.glowBlueBg }]} />
 
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.header}>
-          <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+          <Pressable style={({ pressed }) => [styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Help & Support</Text>
-          <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]} onPress={() => setNewModalOpen(true)}>
-            <Ionicons name="add" size={22} color="#f8fafc" />
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Help & Support</Text>
+          <Pressable style={({ pressed }) => [styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]} onPress={() => setNewModalOpen(true)}>
+            <Ionicons name="add" size={22} color={colors.textPrimary} />
           </Pressable>
         </View>
 
         {tickets.length === 0 ? (
           <View style={styles.centerWrap}>
-            <Ionicons name="help-buoy-outline" size={48} color="#334155" />
-            <Text style={styles.emptyText}>No support tickets yet</Text>
+            <Ionicons name="help-buoy-outline" size={48} color={colors.textMuted} />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No support tickets yet</Text>
             <Pressable style={styles.newTicketBtnWrap} onPress={() => setNewModalOpen(true)}>
-              <LinearGradient colors={["#3b82f6", "#2563eb"]} style={styles.newTicketBtn}>
+              <LinearGradient colors={[colors.blue, colors.blueDark]} style={styles.newTicketBtn}>
                 <Text style={styles.newTicketBtnText}>Raise a Ticket</Text>
               </LinearGradient>
             </Pressable>
@@ -177,16 +189,16 @@ export default function HelpSupportScreen() {
         ) : (
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {tickets.map((t) => (
-              <Pressable key={t.id} style={styles.ticketCard} onPress={() => openThread(t)}>
+              <Pressable key={t.id} style={[styles.ticketCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => openThread(t)}>
                 <View style={styles.ticketTop}>
-                  <Text style={styles.ticketSubject}>{t.subject}</Text>
-                  <View style={[styles.statusBadge, t.status === 'resolved' && styles.statusBadgeResolved]}>
-                    <Text style={[styles.statusText, t.status === 'resolved' && styles.statusTextResolved]}>
+                  <Text style={[styles.ticketSubject, { color: colors.textPrimary }]}>{t.subject}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: colors.gold + '26', borderColor: colors.gold + '4D' }, t.status === 'resolved' && { backgroundColor: colors.green + '26', borderColor: colors.green + '4D' }]}>
+                    <Text style={[styles.statusText, { color: colors.gold }, t.status === 'resolved' && { color: colors.green }]}>
                       {t.status}
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.ticketDate}>{new Date(t.created_at).toLocaleDateString()}</Text>
+                <Text style={[styles.ticketDate, { color: colors.textMuted }]}>{new Date(t.created_at).toLocaleDateString()}</Text>
               </Pressable>
             ))}
             <View style={{ height: 40 }} />
@@ -200,28 +212,28 @@ export default function HelpSupportScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Raise a Support Ticket</Text>
+          <View style={[styles.modalCard, { backgroundColor: colors.surfaceSolid, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Raise a Support Ticket</Text>
             <TextInput
-              style={styles.modalInput}
+              style={[styles.modalInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
               placeholder="Subject"
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               value={subject}
               onChangeText={setSubject}
             />
             <TextInput
-              style={[styles.modalInput, styles.modalTextArea]}
+              style={[styles.modalInput, styles.modalTextArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
               placeholder="Describe your issue..."
-              placeholderTextColor="#64748b"
+              placeholderTextColor={colors.textMuted}
               value={firstMessage}
               onChangeText={setFirstMessage}
               multiline
             />
             <View style={styles.modalBtnRow}>
-              <Pressable style={styles.modalCancelBtn} onPress={() => setNewModalOpen(false)}>
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              <Pressable style={[styles.modalCancelBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => setNewModalOpen(false)}>
+                <Text style={[styles.modalCancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
               </Pressable>
-              <Pressable style={styles.modalConfirmBtn} onPress={handleCreateTicket} disabled={submitting}>
+              <Pressable style={[styles.modalConfirmBtn, { backgroundColor: colors.blue }]} onPress={handleCreateTicket} disabled={submitting}>
                 {submitting ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
@@ -235,18 +247,18 @@ export default function HelpSupportScreen() {
 
       {/* Thread modal */}
       <Modal visible={openTicket !== null} animationType="slide">
-        <View style={styles.root}>
-          <LinearGradient colors={["#0f172a", "#020617", "#0a0f1a"]} style={StyleSheet.absoluteFill} />
+        <View style={[styles.root, { backgroundColor: colors.bg }]}>
+          <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
           <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
               <View style={styles.header}>
                 <Pressable
-                  style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+                  style={({ pressed }) => [styles.backBtn, { backgroundColor: colors.surface, borderColor: colors.border }, pressed && styles.pressed]}
                   onPress={() => setOpenTicket(null)}
                 >
-                  <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+                  <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
                 </Pressable>
-                <Text style={styles.headerTitle} numberOfLines={1}>{openTicket?.subject}</Text>
+                <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>{openTicket?.subject}</Text>
                 <View style={styles.backBtn} />
               </View>
 
@@ -259,9 +271,9 @@ export default function HelpSupportScreen() {
                       m.sender_type === 'user' ? styles.messageRowSent : styles.messageRowReceived,
                     ]}
                   >
-                    <View style={[styles.bubble, m.sender_type === 'user' ? styles.bubbleSent : styles.bubbleReceived]}>
-                      {m.sender_type !== 'user' && <Text style={styles.adminLabel}>Konnect Support</Text>}
-                      <Text style={m.sender_type === 'user' ? styles.messageTextSent : styles.messageTextReceived}>
+                    <View style={[styles.bubble, m.sender_type === 'user' ? { backgroundColor: colors.blue } : { backgroundColor: colors.surfaceSolid, borderWidth: 1, borderColor: colors.border }]}>
+                      {m.sender_type !== 'user' && <Text style={[styles.adminLabel, { color: colors.green }]}>Konnect Support</Text>}
+                      <Text style={m.sender_type === 'user' ? styles.messageTextSent : [styles.messageTextReceived, { color: colors.textPrimary }]}>
                         {m.message}
                       </Text>
                     </View>
@@ -269,16 +281,16 @@ export default function HelpSupportScreen() {
                 ))}
               </ScrollView>
 
-              <View style={styles.inputBar}>
+              <View style={[styles.inputBar, { borderTopColor: colors.border, backgroundColor: colors.surface }]}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: colors.surfaceSolid, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="Type a reply..."
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={colors.textMuted}
                   value={replyText}
                   onChangeText={setReplyText}
                   multiline
                 />
-                <Pressable style={styles.sendBtn} onPress={sendReply} disabled={!replyText.trim()}>
+                <Pressable style={[styles.sendBtn, { backgroundColor: colors.blue }]} onPress={sendReply} disabled={!replyText.trim()}>
                   <Ionicons name="send" size={18} color="#ffffff" />
                 </Pressable>
               </View>
@@ -291,50 +303,46 @@ export default function HelpSupportScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#020617" },
-  glowGreen: { position: "absolute", top: -60, right: -40, width: 220, height: 220, borderRadius: 110, backgroundColor: "rgba(34, 197, 94, 0.1)" },
-  glowBlue: { position: "absolute", bottom: 120, left: -80, width: 260, height: 260, borderRadius: 130, backgroundColor: "rgba(59, 130, 246, 0.08)" },
+  root: { flex: 1 },
+  glowGreen: { position: "absolute", top: -60, right: -40, width: 220, height: 220, borderRadius: 110 },
+  glowBlue: { position: "absolute", bottom: 120, left: -80, width: 260, height: 260, borderRadius: 130 },
   safe: { flex: 1 },
   centerWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 40 },
-  emptyText: { fontSize: 15, color: "#64748b", fontWeight: "500" },
+  emptyText: { fontSize: 15, fontWeight: "500" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
-  backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(30, 41, 59, 0.8)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#1e293b" },
-  headerTitle: { flex: 1, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#f8fafc" },
+  backBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  headerTitle: { flex: 1, textAlign: "center", fontSize: 17, fontWeight: "700" },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
   newTicketBtnWrap: { borderRadius: 14, overflow: "hidden", marginTop: 8 },
   newTicketBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
   newTicketBtnText: { fontSize: 15, fontWeight: "700", color: "#fff" },
-  ticketCard: { backgroundColor: "rgba(30, 41, 59, 0.6)", borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: "#1e293b" },
+  ticketCard: { borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1 },
   ticketTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-  ticketSubject: { flex: 1, fontSize: 15, fontWeight: "700", color: "#f8fafc", marginRight: 8 },
-  ticketDate: { fontSize: 12, color: "#64748b" },
-  statusBadge: { backgroundColor: "rgba(251, 191, 36, 0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: "rgba(251, 191, 36, 0.3)" },
-  statusBadgeResolved: { backgroundColor: "rgba(34, 197, 94, 0.15)", borderColor: "rgba(34, 197, 94, 0.3)" },
-  statusText: { fontSize: 11, fontWeight: "700", color: "#fbbf24", textTransform: "uppercase" },
-  statusTextResolved: { color: "#22c55e" },
+  ticketSubject: { flex: 1, fontSize: 15, fontWeight: "700", marginRight: 8 },
+  ticketDate: { fontSize: 12 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1 },
+  statusText: { fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
-  modalCard: { width: "100%", backgroundColor: "#0f172a", borderRadius: 20, padding: 24, borderWidth: 1, borderColor: "#1e293b" },
-  modalTitle: { fontSize: 18, fontWeight: "700", color: "#f8fafc", marginBottom: 16 },
-  modalInput: { backgroundColor: "rgba(30,41,59,0.7)", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, color: "#f8fafc", borderWidth: 1, borderColor: "#1e293b", marginBottom: 14 },
+  modalCard: { width: "100%", borderRadius: 20, padding: 24, borderWidth: 1 },
+  modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 16 },
+  modalInput: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 14, borderWidth: 1, marginBottom: 14 },
   modalTextArea: { minHeight: 100, textAlignVertical: "top" },
   modalBtnRow: { flexDirection: "row", gap: 12 },
-  modalCancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "rgba(30,41,59,0.7)", borderWidth: 1, borderColor: "#1e293b" },
-  modalCancelBtnText: { fontSize: 14, fontWeight: "600", color: "#94a3b8" },
-  modalConfirmBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", backgroundColor: "#3b82f6" },
+  modalCancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center", borderWidth: 1 },
+  modalCancelBtnText: { fontSize: 14, fontWeight: "600" },
+  modalConfirmBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center" },
   modalConfirmBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
   threadContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16, gap: 10 },
   messageRow: { flexDirection: "row", marginBottom: 4 },
   messageRowSent: { justifyContent: "flex-end" },
   messageRowReceived: { justifyContent: "flex-start" },
   bubble: { maxWidth: "78%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
-  bubbleSent: { backgroundColor: "#3b82f6", borderBottomRightRadius: 4 },
-  bubbleReceived: { backgroundColor: "rgba(30, 41, 59, 0.85)", borderWidth: 1, borderColor: "#1e293b", borderBottomLeftRadius: 4 },
-  adminLabel: { fontSize: 11, fontWeight: "700", color: "#22c55e", marginBottom: 4 },
+  adminLabel: { fontSize: 11, fontWeight: "700", marginBottom: 4 },
   messageTextSent: { color: "#ffffff", fontSize: 15, lineHeight: 21, fontWeight: "500" },
-  messageTextReceived: { color: "#e2e8f0", fontSize: 15, lineHeight: 21, fontWeight: "500" },
-  inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#1e293b", backgroundColor: "rgba(15, 23, 42, 0.95)" },
-  input: { flex: 1, minHeight: 44, maxHeight: 120, backgroundColor: "rgba(30, 41, 59, 0.7)", borderRadius: 22, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: "#f8fafc", borderWidth: 1, borderColor: "#1e293b" },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#3b82f6", alignItems: "center", justifyContent: "center" },
+  messageTextReceived: { fontSize: 15, lineHeight: 21, fontWeight: "500" },
+  inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1 },
+  input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, borderWidth: 1 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
 });

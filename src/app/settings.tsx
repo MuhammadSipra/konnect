@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, View } from "react-native";
+import { useEffect } from "react";
+import { BackHandler, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppAlert } from "../lib/AppAlert";
 import { useTheme } from "../lib/ThemeContext";
@@ -10,6 +11,15 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { mode, colors, setMode } = useTheme();
   const isDark = mode === 'dark';
+
+  useEffect(() => {
+    const onBackPress = () => {
+      router.back();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, []);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>

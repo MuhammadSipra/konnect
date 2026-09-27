@@ -440,9 +440,9 @@ import { useTheme } from '../lib/ThemeContext';
 
               if (myBid) {
                 await supabase
-                  .from('bids')
-                  .update({ status: 'confirmed' })
-                  .eq('id', myBid.id);
+                .from('bids')
+                .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
+                .eq('id', myBid.id);
               }
 
               await supabase

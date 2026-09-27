@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   Pressable,
   ScrollView,
   StatusBar,
@@ -75,6 +76,15 @@ export default function EarningsScreen() {
     load();
   }, []);
 
+  useEffect(() => {
+    const onBackPress = () => {
+      router.back();
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, []);
+
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
@@ -85,7 +95,7 @@ export default function EarningsScreen() {
             <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Earnings</Text>
-          <View style={styles.iconBtn} />
+          <View style={styles.headerSpacer} />
         </View>
 
         {loading ? (
@@ -137,6 +147,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
   iconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  headerSpacer: { width: 40, height: 40 },
   headerTitle: { fontSize: 18, fontWeight: "700" },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
