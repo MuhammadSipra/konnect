@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator, BackHandler, Dimensions, Image, Modal,
+  ActivityIndicator, BackHandler, Dimensions, Image,
   Pressable,
   ScrollView,
   StatusBar,
@@ -13,9 +13,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppAlert } from "../lib/AppAlert";
+import PhotoViewerModal from "../lib/PhotoViewerModal";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../lib/ThemeContext";
-import ZoomableImage from "../lib/ZoomableImage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PORTFOLIO_ITEM_SIZE = (SCREEN_WIDTH - 40 - 12) / 2;
@@ -30,7 +30,7 @@ export default function ContractorDetailScreen() {
   const [portfolio, setPortfolio] = useState<any[]>([]);
   const [jobsDone, setJobsDone] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [viewingIndex, setViewingIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -161,8 +161,8 @@ export default function ContractorDetailScreen() {
             </View>
           ) : (
             <View style={styles.portfolioGrid}>
-              {portfolio.slice(0, 2).map((item) => (
-                <Pressable key={item.id} onPress={() => setViewingPhoto(item.photo_url)}>
+              {portfolio.slice(0, 2).map((item, idx) => (
+                <Pressable key={item.id} onPress={() => setViewingIndex(idx)}>
                   <Image source={{ uri: item.photo_url }} style={[styles.portfolioItem, { width: PORTFOLIO_ITEM_SIZE, height: PORTFOLIO_ITEM_SIZE, backgroundColor: colors.surfaceSolid }]} />
                 </Pressable>
               ))}
@@ -220,14 +220,12 @@ export default function ContractorDetailScreen() {
         </View>
       </SafeAreaView>
 
-      <Modal visible={viewingPhoto !== null} transparent animationType="fade" onRequestClose={() => setViewingPhoto(null)}>
-        <View style={styles.viewerOverlay}>
-          <Pressable style={styles.viewerCloseBtn} onPress={() => setViewingPhoto(null)}>
-            <Ionicons name="close" size={28} color="#fff" />
-          </Pressable>
-          {viewingPhoto && <ZoomableImage uri={viewingPhoto} />}
-        </View>
-      </Modal>
+      <PhotoViewerModal
+        visible={viewingIndex !== null}
+        photos={portfolio.map((p) => p.photo_url)}
+        index={viewingIndex ?? 0}
+        onClose={() => setViewingIndex(null)}
+      />
     </View>
   );
 }
@@ -282,6 +280,4 @@ const styles = StyleSheet.create({
   hireBtnText: { fontSize: 14, fontWeight: "700", color: "#fff", textAlign: "center" },
   avatarImage: { width: 96, height: 96, borderRadius: 48, marginBottom: 16 },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
-  viewerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.95)", alignItems: "center", justifyContent: "center" },
-  viewerCloseBtn: { position: "absolute", top: 50, right: 20, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
 });

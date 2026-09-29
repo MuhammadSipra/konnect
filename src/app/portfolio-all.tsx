@@ -8,7 +8,6 @@ import {
   BackHandler,
   Dimensions,
   Image,
-  Modal,
   Pressable,
   ScrollView,
   StatusBar,
@@ -19,9 +18,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppAlert } from '../lib/AppAlert';
 import { getCurrentProfileId, getCurrentRole } from '../lib/currentProfile';
+import PhotoViewerModal from '../lib/PhotoViewerModal';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../lib/ThemeContext';
-import ZoomableImage from '../lib/ZoomableImage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_ITEM_SIZE = (SCREEN_WIDTH - 40 - 12) / 2;
@@ -34,7 +33,7 @@ export default function PortfolioAllScreen() {
   const [photos, setPhotos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [viewingIndex, setViewingIndex] = useState<number | null>(null);
 
   const targetId = contractorId ? Number(contractorId) : getCurrentProfileId();
   const isOwner = getCurrentRole() === 'contractor' && targetId === getCurrentProfileId();
@@ -129,10 +128,10 @@ export default function PortfolioAllScreen() {
               </View>
             ) : (
               <View style={styles.grid}>
-                {photos.map((photo) => (
+                {photos.map((photo, idx) => (
                   <Pressable
                     key={photo.id}
-                    onPress={() => setViewingPhoto(photo.photo_url)}
+                    onPress={() => setViewingIndex(idx)}
                     onLongPress={() => isOwner && handleDelete(photo)}
                     style={[styles.gridItemWrap, { width: GRID_ITEM_SIZE, height: GRID_ITEM_SIZE, backgroundColor: colors.surfaceSolid }]}
                   >
@@ -161,14 +160,12 @@ export default function PortfolioAllScreen() {
         )}
       </SafeAreaView>
 
-      <Modal visible={viewingPhoto !== null} transparent animationType="fade" onRequestClose={() => setViewingPhoto(null)}>
-        <View style={styles.viewerOverlay}>
-          <Pressable style={styles.viewerCloseBtn} onPress={() => setViewingPhoto(null)}>
-            <Ionicons name="close" size={28} color="#fff" />
-          </Pressable>
-          {viewingPhoto && <ZoomableImage uri={viewingPhoto} />}
-        </View>
-      </Modal>
+      <PhotoViewerModal
+        visible={viewingIndex !== null}
+        photos={photos.map((p) => p.photo_url)}
+        index={viewingIndex ?? 0}
+        onClose={() => setViewingIndex(null)}
+      />
     </View>
   );
 }
@@ -192,6 +189,4 @@ const styles = StyleSheet.create({
   uploadBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, borderRadius: 16, paddingVertical: 16, marginBottom: 8 },
   uploadBtnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
-  viewerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.95)", alignItems: "center", justifyContent: "center" },
-  viewerCloseBtn: { position: "absolute", top: 50, right: 20, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
 });

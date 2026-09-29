@@ -272,7 +272,7 @@ export default function HelpSupportScreen() {
                     ]}
                   >
                     <View style={[styles.bubble, m.sender_type === 'user' ? { backgroundColor: colors.blue } : { backgroundColor: colors.surfaceSolid, borderWidth: 1, borderColor: colors.border }]}>
-                      {m.sender_type !== 'user' && <Text style={[styles.adminLabel, { color: colors.green }]}>Konnect Support</Text>}
+                    {m.sender_type !== 'user' && <Text style={[styles.adminLabel, { color: colors.green }]}>Domexa Support</Text>}
                       <Text style={m.sender_type === 'user' ? styles.messageTextSent : [styles.messageTextReceived, { color: colors.textPrimary }]}>
                         {m.message}
                       </Text>

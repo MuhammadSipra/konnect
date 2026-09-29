@@ -242,11 +242,12 @@ export default function ProfileScreen() {
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {isContractor && (
               <MenuRow
-                icon="shield-checkmark-outline"
-                label="Verification Status"
-                badge={profile.verification_status}
-                onPress={profile.verification_status === 'approved' ? () => {} : () => router.push("/verification-pending" as never)}
-              />
+              icon="shield-checkmark-outline"
+              label="Verification Status"
+              badge={profile.verification_status}
+              onPress={() => router.push("/verification-pending" as never)}
+              disabled={profile.verification_status === 'approved'}
+            />
             )}
             {isContractor && (
               <MenuRow
@@ -360,18 +361,20 @@ function MenuRow({
   badge,
   onPress,
   last,
+  disabled,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   badge?: string;
   onPress: () => void;
   last?: boolean;
+  disabled?: boolean;
 }) {
   const { colors } = useTheme();
   return (
     <Pressable
-      style={[styles.detailRow, !last && { borderBottomWidth: 1, borderBottomColor: colors.border }]}
-      onPress={onPress}
+      style={[styles.detailRow, !last && { borderBottomWidth: 1, borderBottomColor: colors.border }, disabled && { opacity: 0.6 }]}
+      onPress={disabled ? undefined : onPress}
     >
       <Ionicons name={icon} size={18} color={colors.textSecondary} />
       <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{label}</Text>
@@ -380,7 +383,7 @@ function MenuRow({
           <Text style={[styles.menuBadgeText, { color: colors.gold }]}>{badge}</Text>
         </View>
       ) : null}
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      {!disabled && <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />}
     </Pressable>
   );
 }

@@ -64,7 +64,7 @@ export default function SettingsScreen() {
             <SettingRow icon="shield-outline" label="Privacy Policy" colors={colors} onPress={() => AppAlert.show("Coming Soon", "Privacy Policy will be available soon.")} last />
           </View>
 
-          <Text style={[styles.version, { color: colors.textMuted }]}>Konnect by Sipra v1.0.0</Text>
+          <Text style={[styles.version, { color: colors.textMuted }]}>Domexa by Sipra v1.0.0</Text>
           <View style={{ height: 40 }} />
         </ScrollView>
       </SafeAreaView>

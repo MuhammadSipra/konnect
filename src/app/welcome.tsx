@@ -24,7 +24,7 @@ export default function WelcomeScreen() {
         <View style={styles.content}>
           {/* Brand */}
           <View style={styles.brandBlock}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>Konnect</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Domexa</Text>
             <Text style={[styles.byline, { color: colors.textMuted }]}>by Sipra</Text>
             <Text style={[styles.tagline, { color: colors.textSecondary }]}>India's #1 Contractor Marketplace</Text>
           </View>

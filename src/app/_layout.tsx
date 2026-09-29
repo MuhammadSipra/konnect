@@ -142,13 +142,11 @@ export default function Layout() {
 
       return true;
     };
-
     const runInitialCheck = async () => {
-      const minDelay = new Promise((resolve) => setTimeout(resolve, 2000));
-      const hydratedPromise = hydrateCurrentProfile();
-      const [, hydrated] = await Promise.all([minDelay, hydratedPromise]);
-
+      const hydrated = await hydrateCurrentProfile();
+    
       if (hasRouted) return;
+    
 
       if (hydrated) {
         hasRouted = true;

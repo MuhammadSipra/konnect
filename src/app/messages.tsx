@@ -18,20 +18,22 @@ import { getCurrentProfileId, getCurrentRole } from '../lib/currentProfile';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../lib/ThemeContext';
 
-const TABS = [
+const CONTRACTOR_TABS = [
   { key: "home", label: "Home", icon: "home" as const, route: "/contractor" },
   { key: "jobs", label: "Jobs", icon: "briefcase" as const, route: "/jobs" },
   { key: "messages", label: "Messages", icon: "chatbubbles" as const, route: "/messages" },
   { key: "profile", label: "Profile", icon: "person" as const, route: "/profile" },
 ];
 
+const CLIENT_TABS = [
+  { key: "home", label: "Home", icon: "home" as const, route: "/customer" },
+  { key: "projects", label: "My Projects", icon: "folder" as const, route: "/my-projects" },
+  { key: "messages", label: "Messages", icon: "chatbubbles" as const, route: "/messages" },
+  { key: "profile", label: "Profile", icon: "person" as const, route: "/profile" },
+];
+
 function getInitials(name: string): string {
-  return (name || "?")
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  return (name || "?").split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 }
 
 const AVATAR_COLORS = ["#22c55e", "#3b82f6", "#a855f7", "#f59e0b", "#ef4444"];
@@ -40,17 +42,10 @@ async function resolveMyIdentity(): Promise<{ id: number; role: string } | null>
   const cachedId = getCurrentProfileId();
   const cachedRole = getCurrentRole();
   if (cachedId && cachedRole) return { id: cachedId, role: cachedRole };
-
   const { data: sessionData } = await supabase.auth.getSession();
   const authUserId = sessionData?.session?.user?.id;
   if (!authUserId) return null;
-
-  const { data: profileRow } = await supabase
-    .from('profiles')
-    .select('id, user_type')
-    .eq('auth_user_id', authUserId)
-    .maybeSingle();
-
+  const { data: profileRow } = await supabase.from('profiles').select('id, user_type').eq('auth_user_id', authUserId).maybeSingle();
   if (profileRow) return { id: profileRow.id, role: profileRow.user_type };
   return null;
 }
@@ -67,43 +62,24 @@ export default function MessagesScreen() {
   useEffect(() => {
     const load = async () => {
       const identity = await resolveMyIdentity();
-      if (!identity) {
-        setLoading(false);
-        return;
-      }
+      if (!identity) { setLoading(false); return; }
       setMyId(identity.id);
       setMyRole(identity.role);
 
-      const { data: messages } = await supabase
-        .from('messages')
-        .select('*')
-        .or(`sender_id.eq.${identity.id},receiver_id.eq.${identity.id}`)
-        .order('created_at', { ascending: false });
+      const { data: messages } = await supabase.from('messages').select('*').or(`sender_id.eq.${identity.id},receiver_id.eq.${identity.id}`).order('created_at', { ascending: false });
+      if (!messages || messages.length === 0) { setLoading(false); return; }
 
-      if (!messages || messages.length === 0) {
-        setLoading(false);
-        return;
-      }
       const grouped: Record<string, any> = {};
       for (const m of messages) {
         const otherId = m.sender_id === identity.id ? m.receiver_id : m.sender_id;
         const key = `${m.project_id}-${otherId}`;
         if (!grouped[key]) {
-          grouped[key] = {
-            projectId: m.project_id,
-            otherId,
-            lastMessage: m.content,
-            time: m.created_at,
-            unread: 0,
-          };
+          grouped[key] = { projectId: m.project_id, otherId, lastMessage: m.content, time: m.created_at, unread: 0 };
         }
-        if (m.receiver_id === identity.id && !m.is_read) {
-          grouped[key].unread += 1;
-        }
+        if (m.receiver_id === identity.id && !m.is_read) grouped[key].unread += 1;
       }
-      
-      const groupList = Object.values(grouped);
 
+      const groupList = Object.values(grouped);
       const otherIds = [...new Set(groupList.map((g: any) => g.otherId))];
       const projectIds = [...new Set(groupList.map((g: any) => g.projectId))];
 
@@ -126,9 +102,7 @@ export default function MessagesScreen() {
 
   useEffect(() => {
     const onBackPress = () => {
-      if (myRole) {
-        router.replace(myRole === 'contractor' ? '/contractor' : '/customer');
-      }
+      if (myRole) router.replace(myRole === 'contractor' ? '/contractor' : '/customer');
       return true;
     };
     const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
@@ -138,14 +112,12 @@ export default function MessagesScreen() {
   const filteredConversations = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return conversations;
-    return conversations.filter(
-      (c) =>
-        c.name.toLowerCase().includes(query) ||
-        c.lastMessage.toLowerCase().includes(query)
-    );
+    return conversations.filter((c) => c.name.toLowerCase().includes(query) || c.lastMessage.toLowerCase().includes(query));
   }, [search, conversations]);
 
-  const handleTabPress = (tab: (typeof TABS)[number]) => {
+  const currentTabs = myRole === 'client' ? CLIENT_TABS : CONTRACTOR_TABS;
+
+  const handleTabPress = (tab: (typeof currentTabs)[number]) => {
     if (tab.key === "messages") return;
     router.replace(tab.route as never);
   };
@@ -156,30 +128,22 @@ export default function MessagesScreen() {
     const clientId = myRole === 'client' ? myId : conv.otherId;
     router.push({
       pathname: "/chat",
-      params: {
-        contractorId: String(contractorId),
-        clientId: String(clientId),
-        projectId: String(conv.projectId),
-        viewerRole: myRole,
-      },
+      params: { contractorId: String(contractorId), clientId: String(clientId), projectId: String(conv.projectId), viewerRole: myRole },
     } as never);
   };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <StatusBar barStyle={mode === 'dark' ? "light-content" : "dark-content"} />
-
       <LinearGradient colors={colors.bgGradient} style={StyleSheet.absoluteFill} />
       <View style={[styles.glowGreen, { backgroundColor: colors.glowGreenBg }]} />
       <View style={[styles.glowBlue, { backgroundColor: colors.glowBlueBg }]} />
 
       <SafeAreaView style={styles.safe} edges={["top"]}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Messages</Text>
         </View>
 
-        {/* Search */}
         <View style={[styles.searchWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="search" size={18} color={colors.textMuted} />
           <TextInput
@@ -201,12 +165,7 @@ export default function MessagesScreen() {
             <ActivityIndicator size="large" color={colors.green} />
           </View>
         ) : (
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
+          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {filteredConversations.length === 0 ? (
               <View style={styles.emptyState}>
                 <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />
@@ -216,76 +175,46 @@ export default function MessagesScreen() {
               filteredConversations.map((conv, i) => (
                 <Pressable
                   key={`${conv.projectId}-${conv.otherId}`}
-                  style={({ pressed }) => [
-                    styles.conversationRow,
-                    { borderBottomColor: colors.border },
-                    pressed && styles.pressed,
-                  ]}
+                  style={({ pressed }) => [styles.conversationRow, { borderBottomColor: colors.border }, pressed && styles.pressed]}
                   onPress={() => handleConversationPress(conv)}
                 >
-                  <View
-                    style={[styles.avatar, { backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }]}
-                  >
+                  <View style={[styles.avatar, { backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length] }]}>
                     <Text style={styles.avatarText}>{getInitials(conv.name)}</Text>
                   </View>
 
                   <View style={styles.conversationBody}>
-  <View style={styles.conversationTop}>
-    <Text style={[styles.conversationName, { color: colors.textPrimary }]} numberOfLines={1}>
-      {conv.name}
-    </Text>
-    <Text style={[styles.conversationTime, { color: colors.textMuted }]}>
-      {new Date(conv.time).toLocaleDateString()}
-    </Text>
-  </View>
-  {conv.projectTitle ? (
-    <Text style={[styles.projectTag, { color: colors.green }]} numberOfLines={1}>{conv.projectTitle}</Text>
-  ) : null}
-  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-    <Text style={[styles.lastMessage, { flex: 1, color: colors.textSecondary }]} numberOfLines={1}>
-      {conv.lastMessage}
-    </Text>
-    {conv.unread > 0 && (
-      <View style={[styles.unreadBadge, { backgroundColor: colors.green }]}>
-        <Text style={styles.unreadText}>{conv.unread}</Text>
-      </View>
-    )}
-  </View>
-</View>
+                    <View style={styles.conversationTop}>
+                      <Text style={[styles.conversationName, { color: colors.textPrimary }]} numberOfLines={1}>{conv.name}</Text>
+                      <Text style={[styles.conversationTime, { color: colors.textMuted }]}>{new Date(conv.time).toLocaleDateString()}</Text>
+                    </View>
+                    {conv.projectTitle ? (
+                      <Text style={[styles.projectTag, { color: colors.green }]} numberOfLines={1}>{conv.projectTitle}</Text>
+                    ) : null}
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Text style={[styles.lastMessage, { flex: 1, color: colors.textSecondary }]} numberOfLines={1}>{conv.lastMessage}</Text>
+                      {conv.unread > 0 && (
+                        <View style={[styles.unreadBadge, { backgroundColor: colors.green }]}>
+                          <Text style={styles.unreadText}>{conv.unread}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
                 </Pressable>
               ))
             )}
-
             <View style={{ height: 100 }} />
           </ScrollView>
         )}
 
-        {/* Bottom Tab Bar */}
         <View style={[styles.tabBarWrap, { backgroundColor: colors.surfaceSolid, borderTopColor: colors.border }]}>
           <SafeAreaView edges={["bottom"]}>
             <View style={styles.tabBar}>
-              {TABS.map((tab) => {
+              {currentTabs.map((tab) => {
                 const active = tab.key === "messages";
                 return (
-                  <Pressable
-                    key={tab.key}
-                    style={styles.tabItem}
-                    onPress={() => handleTabPress(tab)}
-                  >
-                    <Ionicons
-                      name={
-                        active
-                          ? tab.icon
-                          : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)
-                      }
-                      size={22}
-                      color={active ? colors.green : colors.textMuted}
-                    />
-                    <Text
-                      style={[styles.tabLabel, { color: active ? colors.green : colors.textMuted }]}
-                    >
-                      {tab.label}
-                    </Text>
+                  <Pressable key={tab.key} style={styles.tabItem} onPress={() => handleTabPress(tab)}>
+                    <Ionicons name={active ? tab.icon : (`${tab.icon}-outline` as keyof typeof Ionicons.glyphMap)} size={22} color={active ? colors.green : colors.textMuted} />
+                    <Text style={[styles.tabLabel, { color: active ? colors.green : colors.textMuted }]}>{tab.label}</Text>
                   </Pressable>
                 );
               })}
