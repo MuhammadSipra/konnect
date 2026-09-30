@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../lib/ThemeContext";
 
@@ -24,20 +24,35 @@ export default function WelcomeScreen() {
         <View style={styles.content}>
           {/* Brand */}
           <View style={styles.brandBlock}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Domexa</Text>
-            <Text style={[styles.byline, { color: colors.textMuted }]}>by Sipra</Text>
-            <Text style={[styles.tagline, { color: colors.textSecondary }]}>India's #1 Contractor Marketplace</Text>
+            <View style={styles.lockup}>
+              <View style={styles.markBox}>
+                <Image
+                  source={require("../../assets/images/logo-domexa.png")}
+                  style={styles.markImage}
+                  resizeMode="contain"
+                  accessibilityLabel="Domexa logo"
+                />
+              </View>
+              <View style={styles.wordBox}>
+                <Text style={[styles.wordmark, { color: colors.textPrimary }]}>Domexa</Text>
+                <Text style={[styles.byline, { color: colors.textMuted }]}>by Sipra</Text>
+              </View>
+            </View>
+
+            <Text style={[styles.tagline, { color: colors.textSecondary }]}>
+              India's #1 Contractor Marketplace
+            </Text>
           </View>
 
           {/* Buttons */}
           <View style={styles.actions}>
-          <Pressable
-  style={({ pressed }) => [
-    styles.buttonWrap,
-    pressed && styles.buttonPressed,
-  ]}
-  onPress={() => router.push({ pathname: "/auth", params: { role: "contractor" } })}
->
+            <Pressable
+              style={({ pressed }) => [
+                styles.buttonWrap,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={() => router.push({ pathname: "/auth", params: { role: "contractor" } })}
+            >
               <LinearGradient
                 colors={[colors.green, colors.greenDark]}
                 start={{ x: 0, y: 0 }}
@@ -50,12 +65,12 @@ export default function WelcomeScreen() {
             </Pressable>
 
             <Pressable
-  style={({ pressed }) => [
-    styles.buttonWrap,
-    pressed && styles.buttonPressed,
-  ]}
-  onPress={() => router.push({ pathname: "/auth", params: { role: "client" } })}
->
+              style={({ pressed }) => [
+                styles.buttonWrap,
+                pressed && styles.buttonPressed,
+              ]}
+              onPress={() => router.push({ pathname: "/auth", params: { role: "client" } })}
+            >
               <LinearGradient
                 colors={[colors.blue, colors.blueDark]}
                 start={{ x: 0, y: 0 }}
@@ -82,9 +97,18 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { flex: 1, paddingHorizontal: 28, paddingTop: 48, paddingBottom: 32, justifyContent: "space-between" },
   brandBlock: { marginTop: 24 },
-  title: { fontSize: 56, fontWeight: "800", letterSpacing: -1.5 },
-  byline: { marginTop: 6, fontSize: 16, fontWeight: "500", letterSpacing: 0.3 },
-  tagline: { marginTop: 20, fontSize: 18, fontWeight: "600", lineHeight: 26 },
+
+  // Logo + wordmark lockup
+  lockup: { flexDirection: "row", alignItems: "center" },
+  // logo-domexa.png has transparent padding around the mark, so the image is
+  // drawn larger than its box and shifted to crop the empty space
+  markBox: { width: 68, height: 82, marginRight: 14 },
+  markImage: { position: "absolute", width: 140, height: 140, left: -36, top: -29 },
+  wordBox: { justifyContent: "center" },
+  wordmark: { fontSize: 46, fontWeight: "800", letterSpacing: -1.5, lineHeight: 52 },
+  byline: { marginTop: 2, fontSize: 15, fontWeight: "500", letterSpacing: 0.3 },
+
+  tagline: { marginTop: 28, fontSize: 18, fontWeight: "600", lineHeight: 26 },
   actions: { gap: 16 },
   buttonWrap: {
     borderRadius: 16,
