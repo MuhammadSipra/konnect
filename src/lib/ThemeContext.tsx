@@ -3,7 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { darkColors, lightColors, ThemeColors } from './theme';
 
 type ThemeMode = 'light' | 'dark';
-const STORAGE_KEY = 'konnect_theme_mode';
+const STORAGE_KEY = 'domexa_theme_mode';
 
 const ThemeContext = createContext<{
   mode: ThemeMode;

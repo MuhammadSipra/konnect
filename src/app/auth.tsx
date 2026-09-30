@@ -7,15 +7,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppAlert } from "../lib/AppAlert";
@@ -127,7 +127,7 @@ export default function AuthScreen() {
               </Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                 {isSignUp
-                  ? "Sign up to get started with Konnect"
+                  ? "Sign up to get started with Domexa"
                   : "Sign in to continue"}
               </Text>
             </View>

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const STORAGE_KEY = 'konnect_current_profile';
+const STORAGE_KEY = 'domexa_current_profile';
 
 let currentProfileId: number | null = null;
 let currentRole: "contractor" | "client" | null = null;

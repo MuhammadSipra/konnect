@@ -4,15 +4,15 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from 'react';
 
 import {
-  BackHandler,
-  Image,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
+    BackHandler,
+    Image,
+    Pressable,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppAlert } from '../lib/AppAlert';
@@ -52,7 +52,7 @@ export default function CustomerDashboard() {
 
   const handleExitApp = () => {
     AppAlert.show(
-      "Exit Konnect?",
+      "Exit Domexa?",
       "Are you sure you want to exit the app?",
       [
         { text: "Cancel", style: "cancel" },

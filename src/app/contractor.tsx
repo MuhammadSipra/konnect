@@ -258,7 +258,7 @@ import { useTheme } from '../lib/ThemeContext';
 
     const handleExitApp = () => {
       AppAlert.show(
-        "Exit Konnect?",
+        "Exit Domexa?",
         "Are you sure you want to exit the app?",
         [
           { text: "Cancel", style: "cancel" },
