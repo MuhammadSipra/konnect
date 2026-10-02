@@ -40,7 +40,7 @@ export default function WelcomeScreen() {
             </View>
 
             <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-              India's #1 Contractor Marketplace
+              Find the right contractor for every job
             </Text>
           </View>
 
@@ -83,7 +83,7 @@ export default function WelcomeScreen() {
             </Pressable>
           </View>
 
-          <Text style={[styles.footer, { color: colors.textMuted }]}>Trusted by contractors across India</Text>
+          <Text style={[styles.footer, { color: colors.textMuted }]}>Every contractor is verified before joining</Text>
         </View>
       </SafeAreaView>
     </View>
