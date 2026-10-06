@@ -153,7 +153,7 @@ export default function JobsScreen() {
                       <Text style={[styles.cardDetail, { color: colors.textMuted }]}>{job.project.location}</Text>
                     </View>
                     <Text style={[styles.cardBudget, { color: colors.green }]}>{job.project.budget}</Text>
-                    <Text style={[styles.completedDate, { color: colors.textMuted }]}>Finished on {new Date(job.created_at).toLocaleDateString()}</Text>
+                    <Text style={[styles.completedDate, { color: colors.textMuted }]}>Finished on {new Date(job.completed_at || job.created_at).toLocaleDateString()}</Text>
                     {job.review ? (
                       <View style={[styles.ratingRow, { borderTopColor: colors.border }]}>
                         <Ionicons name="star" size={16} color={colors.gold} />
