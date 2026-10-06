@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, BackHandler, Modal,
   Pressable,
@@ -41,6 +41,8 @@ export default function ProjectDetailScreen() {
   const [ratingModalBid, setRatingModalBid] = useState<any>(null);
   const [selectedRating, setSelectedRating] = useState(0);
   const [comment, setComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const submittingReviewRef = useRef(false);
 
   const [cancelReasonBidId, setCancelReasonBidId] = useState<string | null>(null);
 
@@ -109,6 +111,45 @@ export default function ProjectDetailScreen() {
     loadData();
   };
 
+  // Client removes a shortlist BEFORE the confirmation code is used: free, no penalty.
+  const handleUnlock = (bidId: string) => {
+    AppAlert.show(
+      "Remove shortlist?",
+      "This contractor will go back to Pending. No penalty applies before the confirmation code is used.",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Unlock",
+          style: "destructive",
+          onPress: async () => {
+            await supabase.from('bids').update({ status: 'pending' }).eq('id', bidId);
+            loadData();
+          },
+        },
+      ]
+    );
+  };
+
+  // Contractor withdraws a pending/locked bid BEFORE confirmation: free, no penalty.
+  const handleWithdraw = (bidId: string) => {
+    if (!myContractorId) return;
+    AppAlert.show(
+      "Withdraw your bid?",
+      "Your bid will be removed from this project. No penalty applies before confirmation.",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Withdraw",
+          style: "destructive",
+          onPress: async () => {
+            await supabase.from('bids').delete().eq('id', bidId).eq('contractor_id', myContractorId);
+            router.back();
+          },
+        },
+      ]
+    );
+  };
+
   // Client-initiated cancellation of a CONFIRMED bid opens the reason picker.
   const handleCancelConfirmed = (bidId: string) => {
     setCancelReasonBidId(bidId);
@@ -173,23 +214,40 @@ export default function ProjectDetailScreen() {
   };
 
   const submitReview = async () => {
+    if (submittingReviewRef.current) return; // blocks double taps
     if (!ratingModalBid || selectedRating === 0) {
       AppAlert.show("Select a rating", "Please tap a star rating before submitting.");
       return;
     }
 
-    await supabase.from('bids').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', ratingModalBid.id);
+    submittingReviewRef.current = true;
+    setSubmittingReview(true);
+    try {
+      const { data: existingReview } = await supabase
+        .from('reviews')
+        .select('id')
+        .eq('project_id', project.id)
+        .eq('contractor_id', ratingModalBid.contractor_id)
+        .limit(1);
 
-    await supabase.from('reviews').insert({
-      project_id: project.id,
-      contractor_id: ratingModalBid.contractor_id,
-      client_id: project.client_id,
-      rating: selectedRating,
-      comment: comment.trim(),
-    });
+      await supabase.from('bids').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', ratingModalBid.id);
 
-    setRatingModalBid(null);
-    loadData();
+      if (!existingReview || existingReview.length === 0) {
+        await supabase.from('reviews').insert({
+          project_id: project.id,
+          contractor_id: ratingModalBid.contractor_id,
+          client_id: project.client_id,
+          rating: selectedRating,
+          comment: comment.trim(),
+        });
+      }
+
+      setRatingModalBid(null);
+      loadData();
+    } finally {
+      submittingReviewRef.current = false;
+      setSubmittingReview(false);
+    }
   };
 
   if (loading) {
@@ -223,6 +281,13 @@ export default function ProjectDetailScreen() {
         b.status !== 'blocked'
     )
     .filter((b) => !isContractorView || b.contractor_id === myContractorId);
+
+  // Show the client who cancelled (and why) while the project is open again.
+  const hasActiveBid = bids.some((b) => ['confirmed', 'accepted', 'completed'].includes(b.status));
+  const contractorCancelledBids =
+    isContractorView || hasActiveBid
+      ? []
+      : bids.filter((b) => b.cancelled_by === 'contractor' && (b.status === 'pending' || b.status === 'blocked'));
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
@@ -274,6 +339,21 @@ export default function ProjectDetailScreen() {
             <Text style={[styles.description, { color: colors.textSecondary }]}>{project.description}</Text>
           </View>
 
+          {contractorCancelledBids.map((b) => (
+            <View key={`cancel-${b.id}`} style={styles.cancelBanner}>
+              <Ionicons name="alert-circle-outline" size={20} color="#f97316" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cancelBannerTitle}>{b.profile?.name || 'The contractor'} cancelled this job</Text>
+                {b.cancellation_reason ? (
+                  <Text style={[styles.cancelBannerText, { color: colors.textSecondary }]}>Reason: {b.cancellation_reason}</Text>
+                ) : null}
+                <Text style={[styles.cancelBannerText, { color: colors.textSecondary }]}>
+                  Your project is open again and we're looking for another contractor.
+                </Text>
+              </View>
+            </View>
+          ))}
+
           <View style={styles.bidsHeader}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{isContractorView ? 'Your Bid' : 'Bids Received'}</Text>
             {!isContractorView && <Text style={[styles.bidsCount, { color: colors.textMuted }]}>{visibleBids.length} bids</Text>}
@@ -303,6 +383,9 @@ export default function ProjectDetailScreen() {
                     <Text style={[styles.bidName, { color: colors.textPrimary }]}>{name}</Text>
                     <Text style={[styles.bidSkill, { color: colors.textSecondary }]}>{bid.profile?.skill || ''}</Text>
                     {bid.message ? <Text style={[styles.bidMessage, { color: colors.textMuted }]}>{bid.message}</Text> : null}
+                    {!isContractorView && bid.cancelled_by === 'contractor' && bid.status === 'pending' ? (
+                      <Text style={styles.cancelledTag}>Cancelled this job earlier</Text>
+                    ) : null}
                   </View>
                   <View style={styles.bidRight}>
                     <Text style={[styles.bidAmount, { color: colors.green }]}>
@@ -347,10 +430,24 @@ export default function ProjectDetailScreen() {
                           <Ionicons name="chatbubble-outline" size={13} color={colors.blue} />
                           <Text style={[styles.messageBtnText, { color: colors.blue }]}>Message</Text>
                         </Pressable>
+                        {isContractorView ? (
+                          <Pressable onPress={() => handleWithdraw(bid.id)}>
+                            <Text style={[styles.cancelLink, { color: colors.red }]}>Withdraw</Text>
+                          </Pressable>
+                        ) : (
+                          <Pressable onPress={() => handleUnlock(bid.id)}>
+                            <Text style={[styles.cancelLink, { color: colors.red }]}>Unlock</Text>
+                          </Pressable>
+                        )}
                       </View>
                     ) : isContractorView ? (
-                      <View style={[styles.acceptedBadge, { backgroundColor: colors.gold + '26', borderColor: colors.gold + '59' }]}>
-                        <Text style={[styles.acceptedBadgeText, { color: colors.gold }]}>Pending</Text>
+                      <View style={{ alignItems: "flex-end", gap: 6 }}>
+                        <View style={[styles.acceptedBadge, { backgroundColor: colors.gold + '26', borderColor: colors.gold + '59' }]}>
+                          <Text style={[styles.acceptedBadgeText, { color: colors.gold }]}>Pending</Text>
+                        </View>
+                        <Pressable onPress={() => handleWithdraw(bid.id)}>
+                          <Text style={[styles.cancelLink, { color: colors.red }]}>Withdraw</Text>
+                        </Pressable>
                       </View>
                     ) : (
                       <Pressable
@@ -395,8 +492,12 @@ export default function ProjectDetailScreen() {
               <Pressable style={[styles.modalCancelBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => setRatingModalBid(null)}>
                 <Text style={[styles.modalCancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
               </Pressable>
-              <Pressable style={[styles.modalConfirmBtn, { backgroundColor: colors.green }]} onPress={submitReview}>
-                <Text style={styles.modalConfirmBtnText}>Submit</Text>
+              <Pressable
+                disabled={submittingReview}
+                style={[styles.modalConfirmBtn, { backgroundColor: colors.green, opacity: submittingReview ? 0.6 : 1 }]}
+                onPress={submitReview}
+              >
+                <Text style={styles.modalConfirmBtnText}>{submittingReview ? 'Submitting...' : 'Submit'}</Text>
               </Pressable>
             </View>
           </View>
@@ -461,6 +562,19 @@ const styles = StyleSheet.create({
   infoText: { fontSize: 14, fontWeight: "500" },
   sectionTitle: { fontSize: 17, fontWeight: "700", marginBottom: 12 },
   description: { fontSize: 15, lineHeight: 24 },
+  cancelBanner: {
+    flexDirection: "row",
+    gap: 10,
+    backgroundColor: "rgba(249, 115, 22, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(249, 115, 22, 0.35)",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+  },
+  cancelBannerTitle: { fontSize: 14, fontWeight: "700", color: "#f97316", marginBottom: 4 },
+  cancelBannerText: { fontSize: 13, lineHeight: 19, marginTop: 2 },
+  cancelledTag: { fontSize: 11, fontWeight: "600", color: "#f97316", marginTop: 4 },
   bidsHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   bidsCount: { fontSize: 14, fontWeight: "500" },
   bidCard: { flexDirection: "row", alignItems: "center", borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, gap: 12 },

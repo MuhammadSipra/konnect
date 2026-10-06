@@ -306,7 +306,7 @@ import { useTheme } from '../lib/ThemeContext';
       }
     };
 
-    // Cancelling a bid that was never confirmed = always free, no reason needed.
+    // Cancelling a bid that was never confirmed (pending or locked) = always free, no reason needed.
     // Cancelling a CONFIRMED bid = opens the reason picker below.
     const handleCancel = async (leadId: number) => {
       if (!contractorId) return;
@@ -318,9 +318,12 @@ import { useTheme } from '../lib/ThemeContext';
         return;
       }
 
+      const isLockedBid = status === 'locked';
       AppAlert.show(
-        "Cancel Interest",
-        "Are you sure you want to withdraw your interest? No penalty applies before confirmation.",
+        isLockedBid ? "Withdraw Bid" : "Cancel Interest",
+        isLockedBid
+          ? "The client has shortlisted you. If you withdraw, your bid will be removed. No penalty applies before confirmation."
+          : "Are you sure you want to withdraw your interest? No penalty applies before confirmation.",
         [
           { text: "No", style: "cancel" },
           {
@@ -433,17 +436,21 @@ import { useTheme } from '../lib/ThemeContext';
             onPress: async () => {
               const { data: myBid } = await supabase
                 .from('bids')
-                .select('id')
+                .select('id, status')
                 .eq('project_id', leadId)
                 .eq('contractor_id', contractorId)
                 .single();
 
-              if (myBid) {
-                await supabase
+              if (!myBid || myBid.status !== 'locked') {
+                AppAlert.show("Not available", "The client has removed your shortlist for this project, so it can't be confirmed.");
+                refreshAll(contractorId);
+                return;
+              }
+
+              await supabase
                 .from('bids')
                 .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
                 .eq('id', myBid.id);
-              }
 
               await supabase
                 .from('bids')
@@ -812,7 +819,11 @@ import { useTheme } from '../lib/ThemeContext';
                   <Text style={[styles.cancelLink, { color: colors.red }]}>Cancel</Text>
                 </Pressable>
               </View>
-            ) : isLocked ? null : isPending ? (
+            ) : isLocked ? (
+              <Pressable onPress={onCancel}>
+                <Text style={[styles.cancelLink, { color: colors.red }]}>Withdraw</Text>
+              </Pressable>
+            ) : isPending ? (
               <View style={{ alignItems: "flex-end", gap: 4, maxWidth: 160 }}>
                 {wasClientCancelled ? (
                   <>

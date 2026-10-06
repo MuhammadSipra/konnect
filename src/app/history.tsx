@@ -68,7 +68,7 @@ export default function HistoryScreen() {
           .select('*')
           .eq('contractor_id', identity.id)
           .eq('status', 'completed')
-          .order('completed_at', { ascending: false });
+          .order('completed_at', { ascending: false, nullsFirst: false });
 
         if (!bidsData || bidsData.length === 0) {
           setEntries([]);
@@ -100,7 +100,7 @@ export default function HistoryScreen() {
           .select('*')
           .in('project_id', projectIds)
           .eq('status', 'completed')
-          .order('completed_at', { ascending: false });
+          .order('completed_at', { ascending: false, nullsFirst: false });
 
         if (!bidsData || bidsData.length === 0) {
           setEntries([]);
@@ -137,15 +137,19 @@ export default function HistoryScreen() {
 
   const isContractor = role === 'contractor';
 
+  // Date filters only match jobs that have a completion date.
   const dateFiltered = entries.filter(({ bid }) => {
-    if (dateFilter === 'all' || !bid.completed_at) return true;
+    if (dateFilter === 'all') return true;
+    if (!bid.completed_at) return false;
     const days = dateFilter === '7d' ? 7 : 30;
     const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
     return new Date(bid.completed_at).getTime() >= cutoff;
   });
 
-  const visibleEntries = showAll ? dateFiltered : dateFiltered.slice(0, RECENT_LIMIT);
-  const hasMore = !showAll && entries.length > RECENT_LIMIT;
+  // The "latest 7" limit only applies to the All Time view.
+  const limited = dateFilter === 'all' && !showAll;
+  const visibleEntries = limited ? dateFiltered.slice(0, RECENT_LIMIT) : dateFiltered;
+  const hasMore = limited && dateFiltered.length > RECENT_LIMIT;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
@@ -166,7 +170,7 @@ export default function HistoryScreen() {
           </View>
         ) : (
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {showAll && (
+            {entries.length > 0 && (
               <View style={styles.filterRow}>
                 {DATE_FILTERS.map((f) => (
                   <Pressable
@@ -189,7 +193,9 @@ export default function HistoryScreen() {
             {visibleEntries.length === 0 ? (
               <View style={styles.centerWrap}>
                 <Ionicons name="time-outline" size={40} color={colors.textMuted} />
-                <Text style={[styles.emptyText, { color: colors.textMuted }]}>No completed projects yet.</Text>
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                  {entries.length === 0 ? 'No completed projects yet.' : 'No completed projects in this period.'}
+                </Text>
               </View>
             ) : (
               visibleEntries.map(({ bid, project, contractor, review }) => (

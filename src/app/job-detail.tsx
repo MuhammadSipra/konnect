@@ -42,13 +42,14 @@ export default function JobDetailScreen() {
         const { data: projectData } = await supabase.from('projects').select('*').eq('id', bidData.project_id).single();
         if (projectData) setProject(projectData);
 
-        const { data: reviewData } = await supabase
+        const { data: reviewRows } = await supabase
           .from('reviews')
           .select('*')
           .eq('project_id', bidData.project_id)
           .eq('contractor_id', bidData.contractor_id)
-          .maybeSingle();
-        if (reviewData) setReview(reviewData);
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (reviewRows && reviewRows.length > 0) setReview(reviewRows[0]);
       }
       setLoading(false);
     };

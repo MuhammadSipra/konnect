@@ -25,22 +25,29 @@ export default function WelcomeScreen() {
           {/* Brand */}
           <View style={styles.brandBlock}>
             <View style={styles.lockup}>
-              <View style={styles.markBox}>
-                <Image
-                  source={require("../../assets/images/logo-domexa.png")}
-                  style={styles.markImage}
-                  resizeMode="contain"
-                  accessibilityLabel="Domexa logo"
-                />
-              </View>
+              <Image
+                source={require("../../assets/images/logo-mark.png")}
+                style={styles.mark}
+                resizeMode="contain"
+                accessibilityLabel="Domexa logo"
+              />
               <View style={styles.wordBox}>
-                <Text style={[styles.wordmark, { color: colors.textPrimary }]}>Domexa</Text>
+                <Image
+                  source={require("../../assets/images/wordmark-domexa.png")}
+                  style={[styles.wordmark, { tintColor: colors.textPrimary }]}
+                  resizeMode="contain"
+                  accessibilityLabel="Domexa"
+                />
                 <Text style={[styles.byline, { color: colors.textMuted }]}>by Sipra</Text>
               </View>
             </View>
 
-            <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-              Find the right contractor for every job
+            <Text style={[styles.headline, { color: colors.textPrimary }]}>
+              Every trade.{"\n"}
+              <Text style={{ color: colors.green }}>One app.</Text>
+            </Text>
+            <Text style={[styles.subline, { color: colors.textSecondary }]}>
+              Hire verified contractors for any job.
             </Text>
           </View>
 
@@ -98,17 +105,16 @@ const styles = StyleSheet.create({
   content: { flex: 1, paddingHorizontal: 28, paddingTop: 48, paddingBottom: 32, justifyContent: "space-between" },
   brandBlock: { marginTop: 24 },
 
-  // Logo + wordmark lockup
+  // Logo mark + wordmark lockup
   lockup: { flexDirection: "row", alignItems: "center" },
-  // logo-domexa.png has transparent padding around the mark, so the image is
-  // drawn larger than its box and shifted to crop the empty space
-  markBox: { width: 68, height: 82, marginRight: 14 },
-  markImage: { position: "absolute", width: 140, height: 140, left: -36, top: -29 },
+  mark: { width: 54, height: 64, marginRight: 14 },
   wordBox: { justifyContent: "center" },
-  wordmark: { fontSize: 46, fontWeight: "800", letterSpacing: -1.5, lineHeight: 52 },
-  byline: { marginTop: 2, fontSize: 15, fontWeight: "500", letterSpacing: 0.3 },
+  wordmark: { width: 191, height: 38 },
+  byline: { marginTop: 4, marginLeft: 2, fontSize: 14, fontWeight: "500", letterSpacing: 0.3 },
 
-  tagline: { marginTop: 28, fontSize: 18, fontWeight: "600", lineHeight: 26 },
+  headline: { marginTop: 40, fontSize: 36, fontWeight: "800", letterSpacing: -1, lineHeight: 42 },
+  subline: { marginTop: 14, fontSize: 16, fontWeight: "500", lineHeight: 24 },
+
   actions: { gap: 16 },
   buttonWrap: {
     borderRadius: 16,

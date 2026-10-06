@@ -2,14 +2,20 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
-import { BackHandler, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, View } from "react-native";
+import { BackHandler, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppAlert } from "../lib/AppAlert";
-import { useTheme } from "../lib/ThemeContext";
+import { ThemePreference, useTheme } from "../lib/ThemeContext";
+
+const THEME_OPTIONS: { key: ThemePreference; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: "system", label: "System", icon: "phone-portrait-outline" },
+  { key: "light", label: "Light", icon: "sunny-outline" },
+  { key: "dark", label: "Dark", icon: "moon-outline" },
+];
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { mode, colors, setMode } = useTheme();
+  const { mode, colors, preference, setPreference } = useTheme();
   const isDark = mode === 'dark';
 
   useEffect(() => {
@@ -38,19 +44,29 @@ export default function SettingsScreen() {
         </View>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Appearance</Text>
-          <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.row}>
-              <View style={styles.rowLeft}>
-                <Ionicons name={isDark ? "moon" : "sunny-outline"} size={20} color={colors.textMuted} />
-                <Text style={[styles.rowLabel, { color: colors.textPrimary }]}>Dark Mode</Text>
-              </View>
-              <Switch
-                value={isDark}
-                onValueChange={(v) => setMode(v ? 'dark' : 'light')}
-                trackColor={{ false: colors.border, true: colors.green }}
-                thumbColor="#fff"
-              />
+          <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border, padding: 14 }]}>
+            <View style={styles.segmentRow}>
+              {THEME_OPTIONS.map((opt) => {
+                const selected = preference === opt.key;
+                return (
+                  <Pressable
+                    key={opt.key}
+                    style={[
+                      styles.segment,
+                      { backgroundColor: colors.bg, borderColor: colors.border },
+                      selected && { backgroundColor: colors.green + '26', borderColor: colors.green },
+                    ]}
+                    onPress={() => setPreference(opt.key)}
+                  >
+                    <Ionicons name={opt.icon} size={20} color={selected ? colors.green : colors.textMuted} />
+                    <Text style={[styles.segmentLabel, { color: selected ? colors.green : colors.textSecondary }]}>{opt.label}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
+            <Text style={[styles.helperText, { color: colors.textMuted }]}>
+              System follows your phone's light/dark setting.
+            </Text>
           </View>
 
           <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Support</Text>
@@ -97,6 +113,10 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
   sectionLabel: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
   section: { borderRadius: 16, borderWidth: 1, marginBottom: 20, overflow: "hidden" },
+  segmentRow: { flexDirection: "row", gap: 10 },
+  segment: { flex: 1, alignItems: "center", gap: 6, paddingVertical: 14, borderRadius: 12, borderWidth: 1 },
+  segmentLabel: { fontSize: 13, fontWeight: "600" },
+  helperText: { fontSize: 12, marginTop: 12 },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14 },
   rowLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   rowLabel: { fontSize: 15, fontWeight: "500" },
