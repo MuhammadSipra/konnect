@@ -47,7 +47,7 @@ export default function WelcomeScreen() {
               <Text style={{ color: colors.green }}>One app.</Text>
             </Text>
             <Text style={[styles.subline, { color: colors.textSecondary }]}>
-              Hire verified contractors for any job.
+              Hire verified contractors for every job.
             </Text>
           </View>
 
@@ -90,7 +90,7 @@ export default function WelcomeScreen() {
             </Pressable>
           </View>
 
-          <Text style={[styles.footer, { color: colors.textMuted }]}>Every contractor is verified before joining</Text>
+          <Text style={[styles.footer, { color: colors.textMuted }]}>Every contractor is verified</Text>
         </View>
       </SafeAreaView>
     </View>
@@ -99,7 +99,7 @@ export default function WelcomeScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  glowGreen: { position: "absolute", top: -80, left: -60, width: 280, height: 280, borderRadius: 140 },
+  glowGreen: { position: "absolute", top: -200, left: -140, width: 280, height: 280, borderRadius: 140 },
   glowBlue: { position: "absolute", bottom: 40, right: -80, width: 320, height: 320, borderRadius: 160 },
   safe: { flex: 1 },
   content: { flex: 1, paddingHorizontal: 28, paddingTop: 48, paddingBottom: 32, justifyContent: "space-between" },
