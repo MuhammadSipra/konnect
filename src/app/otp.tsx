@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AppAlert } from "../lib/AppAlert";
 import { setCurrentProfile } from "../lib/currentProfile";
 import { clearPendingGoogleTokens, getPendingGoogleTokens } from "../lib/pendingGoogleSession";
+import { findProfileByEmail, findProfileByPhone, roleMismatchMessage } from "../lib/profileLookup";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../lib/ThemeContext";
 const OTP_LENGTH = 6;
@@ -105,6 +106,11 @@ export default function OtpScreen() {
     }
   };
 
+  const goToWelcome = () => {
+    router.dismissAll();
+    router.replace('/welcome');
+  };
+
   const handleVerify = async () => {
     if (!isComplete || verifying) return;
     setVerifying(true);
@@ -144,8 +150,10 @@ export default function OtpScreen() {
 
         const session = setData.session;
         const authUserId = session.user.id;
+        const sessionEmail = session.user.email || '';
 
-        let existingProfile = null;
+        // One person = one profile (one role): find by login id, else by email (any role).
+        let existingProfile: any = null;
         const { data: byAuthId } = await supabase
           .from('profiles')
           .select('*')
@@ -153,19 +161,30 @@ export default function OtpScreen() {
           .maybeSingle();
         existingProfile = byAuthId;
 
-        if (!existingProfile && session.user.email) {
-          const { data: byEmail } = await supabase
-            .from('profiles')
-            .select('*')
-            .ilike('email', session.user.email)
-            .eq('user_type', String(role))
-            .is('auth_user_id', null)
-            .maybeSingle();
-
+        if (!existingProfile && sessionEmail) {
+          const byEmail = await findProfileByEmail(sessionEmail);
           if (byEmail) {
+            if (byEmail.auth_user_id) {
+              await supabase.auth.signOut();
+              setVerifying(false);
+              AppAlert.show("Account problem", "This email is linked to a different login. Please contact support.", [
+                { text: "OK", onPress: goToWelcome },
+              ]);
+              return;
+            }
             await supabase.from('profiles').update({ auth_user_id: authUserId }).eq('id', byEmail.id);
             existingProfile = { ...byEmail, auth_user_id: authUserId };
           }
+        }
+
+        // Registered, but under the other role: do not log in, do not open signup.
+        if (existingProfile && existingProfile.user_type !== String(role)) {
+          await supabase.auth.signOut();
+          setVerifying(false);
+          AppAlert.show("Already registered", roleMismatchMessage(existingProfile.user_type, 'email'), [
+            { text: "OK", onPress: goToWelcome },
+          ]);
+          return;
         }
 
         setVerifying(false);
@@ -192,13 +211,16 @@ export default function OtpScreen() {
         return;
       }
 
-      // Phone-OTP flow
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('phone', String(phone))
-        .eq('user_type', role)
-        .maybeSingle();
+      // Phone-OTP flow: find by phone (any role)
+      const existingProfile = await findProfileByPhone(String(phone));
+
+      if (existingProfile && existingProfile.user_type !== String(role)) {
+        setVerifying(false);
+        AppAlert.show("Already registered", roleMismatchMessage(existingProfile.user_type, 'phone'), [
+          { text: "OK", onPress: goToWelcome },
+        ]);
+        return;
+      }
 
       setVerifying(false);
       if (existingProfile) {

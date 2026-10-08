@@ -7,7 +7,8 @@ import { AppAlertHost } from "../lib/AppAlert";
 import { ThemeProvider } from "../lib/ThemeContext";
 import { hydrateCurrentProfile, setCurrentProfile } from "../lib/currentProfile";
 import { setPendingGoogleTokens } from "../lib/pendingGoogleSession";
-import { getPendingRole } from "../lib/pendingRole";
+import { resolvePendingRole } from "../lib/pendingRole";
+import { findProfileByEmail } from "../lib/profileLookup";
 import { supabase } from "../lib/supabase";
 
 function decodeJwtEmail(token: string): string | null {
@@ -28,9 +29,11 @@ export default function Layout() {
     OTPWidget.initializeWidget('3667446a4f79373732303939', '555661TBCi9YjCmrdy6a6b2bb4P1');
 
     let hasRouted = false;
-    let googleUrlProcessed = false;
+    let lastProcessedToken: string | null = null;
 
-    const linkOrFindProfile = async (authUserId: string, role: string, email: string | null) => {
+    // One person = one profile (one role). Find by login id first, then by
+    // email (any role) and link it the first time this Google account is used.
+    const linkOrFindProfile = async (authUserId: string, email: string | null) => {
       const { data: byAuthId } = await supabase
         .from('profiles')
         .select('*')
@@ -40,15 +43,8 @@ export default function Layout() {
       if (byAuthId) return byAuthId;
 
       if (email) {
-        const { data: byEmail } = await supabase
-          .from('profiles')
-          .select('*')
-          .ilike('email', email)
-          .eq('user_type', role)
-          .is('auth_user_id', null)
-          .maybeSingle();
-
-        if (byEmail) {
+        const byEmail = await findProfileByEmail(email);
+        if (byEmail && !byEmail.auth_user_id) {
           await supabase.from('profiles').update({ auth_user_id: authUserId }).eq('id', byEmail.id);
           return { ...byEmail, auth_user_id: authUserId };
         }
@@ -64,9 +60,9 @@ export default function Layout() {
       if (!session?.user) return;
 
       const authUserId = session.user.id;
-      const role = getPendingRole();
+      const role = (await resolvePendingRole()) ?? 'client';
 
-      const existingProfile = await linkOrFindProfile(authUserId, role, session.user.email || null);
+      const existingProfile = await linkOrFindProfile(authUserId, session.user.email || null);
 
       if (existingProfile) {
         setCurrentProfile(existingProfile.id, existingProfile.user_type);
@@ -92,14 +88,11 @@ export default function Layout() {
       }
     };
 
-    // Google OAuth deep-link handler. Does NOT call setSession here anymore —
-    // that used to create a real, persisted login before the OTP screen was
-    // even shown, which is exactly what let someone back out and get in
-    // without ever entering the code. Instead: read the email straight out
-    // of the (unset) token, send the OTP, and hold the tokens in memory —
-    // they only become a real session once OTP verification succeeds.
+    // Google OAuth deep-link handler. Does NOT call setSession here — the
+    // tokens are held in memory and only become a real session after the
+    // email OTP is verified (see otp.tsx).
     const handleUrl = async (url: string | null): Promise<boolean> => {
-      if (!url || !url.includes('access_token') || googleUrlProcessed) return false;
+      if (!url || !url.includes('access_token')) return false;
 
       const hashPart = url.split('#')[1] || url.split('?')[1];
       if (!hashPart) return false;
@@ -109,11 +102,22 @@ export default function Layout() {
       const refresh_token = params.get('refresh_token');
       if (!access_token || !refresh_token) return false;
 
-      googleUrlProcessed = true;
+      // Same URL can arrive twice (initial URL + event). A NEW login has a new token.
+      if (access_token === lastProcessedToken) return false;
+      lastProcessedToken = access_token;
 
       const email = decodeJwtEmail(access_token);
       if (!email) {
         console.log('Could not read email from Google token');
+        return true;
+      }
+
+      // The role the user tapped on the welcome screen (survives an app restart).
+      const role = await resolvePendingRole();
+      if (!role) {
+        hasRouted = true;
+        Alert.alert("Please try again", "Please choose whether you are a Contractor or a Client, then sign in again.");
+        router.replace('/welcome');
         return true;
       }
 
@@ -127,7 +131,7 @@ export default function Layout() {
             params: {
               mode: 'google',
               email,
-              role: getPendingRole(),
+              role,
               reqId: response.message,
             },
           });
@@ -142,11 +146,11 @@ export default function Layout() {
 
       return true;
     };
+
     const runInitialCheck = async () => {
       const hydrated = await hydrateCurrentProfile();
-    
+
       if (hasRouted) return;
-    
 
       if (hydrated) {
         hasRouted = true;

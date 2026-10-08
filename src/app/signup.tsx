@@ -21,6 +21,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppAlert } from "../lib/AppAlert";
 import { setCurrentProfile } from "../lib/currentProfile";
+import { findProfileByEmail, findProfileByPhone } from "../lib/profileLookup";
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../lib/ThemeContext";
 
@@ -196,6 +197,19 @@ export default function SignupScreen() {
     const identifier = channel === "phone" ? "91" + phoneValue : email.trim();
     setOtpBusy(true);
     try {
+      const alreadyUsed =
+        channel === "phone"
+          ? await findProfileByPhone("+91" + phoneValue)
+          : await findProfileByEmail(email);
+      if (alreadyUsed) {
+        AppAlert.show(
+          "Already registered",
+          channel === "phone"
+            ? "This mobile number is already registered with Domexa. Please use a different number."
+            : "This email is already registered with Domexa. Please use a different email."
+        );
+        return;
+      }
       const response = await OTPWidget.sendOTP({ identifier });
       if (response.type === "success") {
         setVerifyReqId(response.message);
@@ -248,8 +262,12 @@ export default function SignupScreen() {
   };
 
   const handleSubmit = async () => {
-    
     if (submitting) return;
+    if (!step1Valid) {
+      AppAlert.show("Missing info", "Please fill at least your name and location.");
+      setStep(1);
+      return;
+    }
     setSubmitting(true);
 
     const { data: sessionData } = await supabase.auth.getSession();
@@ -269,10 +287,10 @@ export default function SignupScreen() {
 
     const payload: any = {
       auth_user_id: authUserId,
-      phone: phoneValue ? "+91" + phoneValue : null,
+        phone: phoneVerified && phoneValue ? "+91" + phoneValue : null, 
       name: name.trim(),
       location: location.trim(),
-      email: email.trim(),
+      email: emailVerified && email.trim() ? email.trim() : null,
       whatsapp_number: whatsapp.trim(),
       user_type: role,
     };
@@ -305,7 +323,13 @@ export default function SignupScreen() {
   setSubmitting(false);
   
   if (error) {
-    AppAlert.show("Signup Error", error.message);
+    const duplicate = error.code === "23505";
+    AppAlert.show(
+      duplicate ? "Already registered" : "Signup Error",
+      duplicate
+        ? "This mobile number or email is already registered with Domexa. Please log in instead."
+        : error.message
+    );
     console.log("SIGNUP ERROR:", error.message);
     return;
   }

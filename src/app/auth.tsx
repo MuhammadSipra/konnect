@@ -7,15 +7,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from "react";
 import {
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppAlert } from "../lib/AppAlert";
@@ -67,7 +67,7 @@ export default function AuthScreen() {
   };
 
   const handleGoogleSignIn = async () => {
-    setPendingRole(role || "client");
+    await setPendingRole(role || "client");
     const redirectUrl = makeRedirectUri();
     console.log('REDIRECT URL:', redirectUrl);
   
